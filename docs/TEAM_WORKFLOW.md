@@ -1,37 +1,37 @@
-# Team Workflow
+# ChainProof 团队协作规范
 
-## Team structure
+## 三人分工
 
-ChainProof is designed for a three-person team. Each member owns one primary track while reviewing integration work from the others.
+ChainProof 按三人小组设计，每个人负责一条主线，同时需要参与整体集成与互相 review。
 
-### Track A — Frontend / Product
-Owns:
-- Vue pages and components
-- Responsive layout
-- Dashboard and timeline
-- Certificate and verification views
-- Demo polish
+### A：前端 / 产品
+主要负责：
+- Vue 页面与组件
+- 响应式布局
+- Dashboard 与 Timeline
+- Certificate 与验证页面
+- 最终 Demo 的视觉打磨
 
-### Track B — Blockchain / Smart Contract
-Owns:
-- Fabric test-network setup
-- Chaincode data model and transactions
-- Ledger history queries
-- Contract tests
-- Deployment documentation
+### B：区块链 / 智能合约
+主要负责：
+- Fabric test-network 搭建
+- Chaincode 数据模型与交易逻辑
+- 账本历史查询
+- 合约测试
+- 部署说明文档
 
-### Track C — Backend / Integration
-Owns:
+### C：后端 / 集成
+主要负责：
 - Express REST API
-- SHA-256 file hashing
-- Upload handling
-- Fabric Gateway connection
-- Error mapping
-- Frontend/backend integration
+- SHA-256 文件哈希
+- 文件上传处理
+- Fabric Gateway 连接
+- 错误处理
+- 前后端联调
 
-## Branch convention
+## 分支命名
 
-Use one branch per issue:
+每个 Issue 使用独立分支：
 
 ```text
 feat/1-fabric-network
@@ -42,32 +42,40 @@ fix/<issue>-short-description
 docs/<issue>-short-description
 ```
 
-## Pull request rule
+## Pull Request 规则
 
-- Do not push feature work directly to `main` once team development begins.
-- Link every PR to its GitHub Issue.
-- Keep PRs small enough to review in roughly 10 minutes.
-- At least one teammate should review integration-sensitive PRs.
-- Squash merge is preferred for clean course-project history.
+- 团队正式开发开始后，功能代码不要直接 push 到 `main`。
+- 每个 PR 必须关联对应 GitHub Issue。
+- PR 尽量保持小而清晰，目标是 10 分钟左右可以 review 完。
+- 涉及集成逻辑的 PR，至少让另一位成员检查一次。
+- 建议使用 squash merge，保持课程项目提交历史清晰。
 
-## Definition of done
+## Definition of Done
 
-An issue is done only when:
-- implementation is committed;
-- acceptance criteria are manually or automatically checked;
-- setup/documentation changes are included;
-- no secrets or generated Fabric credentials are committed;
-- the relevant demo flow works from a clean checkout where practical.
+一个 Issue 只有满足以下条件才算完成：
+- 代码已经提交；
+- 验收条件已经手动或自动检查；
+- 必要的配置和说明文档已经同步更新；
+- 没有提交私钥、Fabric 生成证书或其他敏感文件；
+- 在合理情况下，相关 Demo 流程可以从干净环境重新跑通。
 
-## Weekly rhythm
+## 每周协作节奏
 
-Each week:
-1. Agree on the week's acceptance criteria.
-2. Work independently on owned issues.
-3. Integrate before the end of the week.
-4. Record blockers in the issue instead of private chat only.
-5. Keep the final week for polish and delivery rather than new features.
+每周建议：
+1. 先确认本周每个 Issue 的验收标准。
+2. 三个人分别推进自己的主任务。
+3. 周末前完成联调，而不是等到最后一周。
+4. 遇到 blocker 直接记录在 Issue 中，不只留在微信群或私聊里。
+5. 最后一周只做修复、打磨和交付，原则上不再加大功能。
 
-## Scope protection
+## 控制项目范围
 
-Do not add tokens, NFT functionality, payments, cross-chain features, AI contribution scoring, or complex dispute arbitration unless all MVP acceptance criteria are already complete.
+除非 MVP 已经全部完成，否则不要新增：
+- Token
+- NFT
+- 支付
+- 跨链
+- AI 自动贡献评分
+- 复杂争议仲裁
+
+这个项目拿高分的关键是“完整、实用、好看、能稳定演示”，不是堆功能。
