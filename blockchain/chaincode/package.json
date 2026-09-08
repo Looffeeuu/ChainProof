@@ -1,0 +1,13 @@
+{
+  "name": "chainproof-chaincode",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "fabric-chaincode-node start"
+  },
+  "dependencies": {
+    "fabric-contract-api": "latest",
+    "fabric-shim": "latest"
+  }
+}
