@@ -1,0 +1,15 @@
+{
+  "name": "chainproof-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/app.js",
+    "start": "node src/app.js"
+  },
+  "dependencies": {
+    "cors": "latest",
+    "express": "latest",
+    "multer": "latest"
+  }
+}
