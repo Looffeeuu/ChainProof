@@ -1,82 +1,82 @@
-# ChainProof Architecture
+# ChainProof 系统架构
 
-## 1. Overview
+## 1. 总体架构
 
-ChainProof uses a conventional B/S web architecture with Hyperledger Fabric as the trusted record layer.
+ChainProof 采用常规 B/S Web 架构，并使用 Hyperledger Fabric 作为可信记录层。
 
 ```text
-Browser
+浏览器
   |
   v
-Vue 3 Frontend
+Vue 3 前端
   |
   | REST/JSON
   v
-Node.js + Express Backend
+Node.js + Express 后端
   |             |
-  |             +--> SQLite / local file storage
+  |             +--> SQLite / 本地文件存储
   |
   +--> Fabric Gateway SDK
             |
             v
      Hyperledger Fabric
             |
-            +--> ChainProof chaincode
+            +--> ChainProof Chaincode
 ```
 
-## 2. On-chain vs off-chain boundary
+## 2. 链上 / 链下边界
 
-### On-chain
-Store data whose history and integrity should be tamper-evident:
-- Project identifiers and core membership references
-- Milestone identifiers
-- File SHA-256 hashes
-- Contribution allocations
-- Confirmation decisions
-- Verification status
-- Certificate records
-- Transaction timestamps / ledger history
+### 链上保存
+用于保存需要防篡改、可追溯的数据：
+- 项目标识与核心成员引用
+- 里程碑标识
+- 文件 SHA-256
+- 贡献比例
+- 成员确认结果
+- 验证状态
+- 贡献证明记录
+- 区块链交易时间 / 历史记录
 
-### Off-chain
-Store data that is large, replaceable, presentation-oriented, or privacy-sensitive:
-- Uploaded source files
-- User avatars
-- UI preferences
-- Cached dashboard aggregates
-- Session information
+### 链下保存
+用于保存体积较大、可替换、偏展示或隐私相关的数据：
+- 用户上传的原始文件
+- 用户头像
+- UI 偏好
+- Dashboard 缓存统计
+- 会话信息
 
-## 3. Frontend
+## 3. 前端
 
-Technology: Vue 3 + Vite.
+技术：Vue 3 + Vite。
 
-Planned views:
+计划页面：
 - Dashboard
-- Project list
-- Project detail
-- Create project
-- Submit milestone
-- Contribution confirmation
+- 项目列表
+- 项目详情
+- 创建项目
+- 提交里程碑
+- 贡献确认
 - Timeline
-- Certificate
-- Public verification page
+- 贡献证明
+- 公开验证页面
 
-The frontend must not communicate directly with Fabric.
+前端不能直接与 Fabric 通信，所有链上操作都通过后端完成。
 
-## 4. Backend
+## 4. 后端
 
-Technology: Node.js + Express.
+技术：Node.js + Express。
 
-Responsibilities:
-- REST API
-- Input validation
-- SHA-256 file hashing
-- Local file handling
-- Fabric Gateway connection
-- Transaction submission/evaluation
-- Mapping blockchain errors into user-friendly API errors
-- Optional SQLite persistence for off-chain data
+主要职责：
+- 提供 REST API
+- 参数校验
+- 文件 SHA-256 计算
+- 本地文件处理
+- Fabric Gateway 连接
+- 区块链交易提交 / 查询
+- 将 Fabric 错误转换成前端可理解的 API 错误
+- 可选使用 SQLite 保存链下数据
 
-Suggested modules:
+建议模块：
 
 ```text
 backend/src/
@@ -90,13 +90,13 @@ backend/src/
 └── config/
 ```
 
-## 5. Blockchain layer
+## 5. 区块链层
 
-Technology: Hyperledger Fabric with JavaScript chaincode.
+技术：Hyperledger Fabric + JavaScript Chaincode。
 
-Primary smart contract: `ChainProofContract`.
+主要智能合约：`ChainProofContract`。
 
-Initial transaction functions:
+计划事务函数：
 - `CreateProject`
 - `GetProject`
 - `CreateMilestone`
@@ -107,44 +107,44 @@ Initial transaction functions:
 - `IssueCertificate`
 - `VerifyCertificate`
 
-For the MVP, the network may use the official local Fabric test-network. The application architecture should still explain how separate organizations could represent independent stakeholders in a real consortium deployment.
+课程 MVP 可以直接基于官方本地 Fabric test-network 开发。答辩时可以说明，在真实联盟链场景中，不同组织节点可以代表不同团队、学院、竞赛主办方或验证机构。
 
-## 6. Integrity model
+## 6. 文件完整性验证模型
 
-When a file is submitted:
+上传文件后：
 
 ```text
-file bytes
+文件内容
    |
    v
 SHA-256
    |
    v
-64-character digest
+64 位十六进制摘要
    |
    v
-Fabric transaction
+Fabric 交易
 ```
 
-The uploaded file stays off-chain. Verification recalculates SHA-256 and compares it with the ledger digest.
+原始文件保留在链下。后续验证时重新计算 SHA-256，并与链上记录比对。
 
-## 7. Contribution confirmation rule
+## 7. 贡献确认规则
 
-MVP rule:
-- Contributor percentages must sum to exactly 100.
-- Every listed contributor must confirm.
-- Any rejection prevents automatic verification.
-- Once all required confirmations are present, milestone status changes to `VERIFIED`.
+MVP 规则：
+- 所有 contributor 的贡献比例之和必须严格等于 100%。
+- 所有列出的 contributor 都必须确认。
+- 任意成员拒绝后，不允许自动进入已验证状态。
+- 所有必要确认完成后，milestone 状态变为 `VERIFIED`。
 
-This rule is intentionally simple so the project can demonstrate blockchain-backed consensus without building a complex governance engine.
+这个规则故意保持简单，便于完整展示“多人确认 + 区块链存证”的核心逻辑，而不引入复杂治理系统。
 
-## 8. Security / repository hygiene
+## 8. 安全与仓库规范
 
-Never commit:
-- Fabric private keys
-- generated certificates
-- connection secrets
-- `.env` files
-- uploaded user files
+严禁提交：
+- Fabric 私钥
+- 自动生成的证书
+- 连接秘密配置
+- `.env`
+- 用户上传文件
 
-Use `.env.example` for configuration templates.
+需要配置模板时使用 `.env.example`。
