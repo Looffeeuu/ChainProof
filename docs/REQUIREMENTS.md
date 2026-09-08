@@ -1,28 +1,28 @@
-# ChainProof MVP Requirements
+# ChainProof MVP 需求文档
 
-## 1. Product goal
+## 1. 产品目标
 
-ChainProof provides a trustworthy way for project teams to record milestones, contribution claims, confirmations, and final contribution evidence.
+ChainProof 为项目团队提供一种可信方式，用于记录项目里程碑、贡献声明、成员确认结果以及最终贡献证明。
 
-The MVP should demonstrate one complete scenario from project creation to certificate verification within a short classroom demo.
+MVP 的目标是在一次简短的课堂演示中，完整展示“创建项目 → 提交成果 → 声明贡献 → 多人确认 → 链上验证 → 生成证明”的闭环。
 
-## 2. Roles
+## 2. 用户角色
 
-### Project owner
-- Creates a project.
-- Adds members.
-- Submits or reviews milestones.
+### 项目负责人
+- 创建项目。
+- 添加团队成员。
+- 提交或查看项目里程碑。
 
-### Team member
-- Views assigned projects.
-- Reviews contribution claims.
-- Confirms or rejects a claim.
+### 团队成员
+- 查看自己参与的项目。
+- 查看贡献声明。
+- 对贡献声明进行确认或拒绝。
 
-### External verifier
-- Opens a public verification page using a certificate ID.
-- Checks whether the certificate exists and matches the ledger record.
+### 外部验证者
+- 通过贡献证明 ID 打开公开验证页面。
+- 检查该证明是否存在，并核对是否与链上记录一致。
 
-## 3. Core entities
+## 3. 核心数据实体
 
 ### Project
 - projectId
@@ -63,69 +63,69 @@ The MVP should demonstrate one complete scenario from project creation to certif
 - issuedAt
 - verificationStatus
 
-## 4. Functional requirements
+## 4. 功能需求
 
-### FR-01 Project creation
-Users can create a project with project name, description, and members.
+### FR-01 创建项目
+用户可以填写项目名称、项目描述和团队成员来创建项目。
 
-### FR-02 Milestone submission
-Users can submit a milestone linked to a project.
+### FR-02 提交里程碑
+用户可以向指定项目提交一个里程碑。
 
-### FR-03 File hashing
-The backend computes SHA-256 for an uploaded file. The file itself remains off-chain.
+### FR-03 文件哈希
+后端对上传文件计算 SHA-256。文件本体保留在链下，不直接写入区块链。
 
-### FR-04 Contribution declaration
-The milestone submitter allocates contribution percentages to project members. Total must equal 100%.
+### FR-04 贡献比例声明
+里程碑提交者需要为参与成员分配贡献比例，总和必须等于 100%。
 
-### FR-05 Member confirmation
-Project members can confirm or reject the contribution declaration.
+### FR-05 成员确认
+相关成员可以确认或拒绝该贡献声明。
 
-### FR-06 Verification state
-A milestone becomes VERIFIED when the configured confirmation rule is satisfied.
+### FR-06 验证状态
+当预设的确认规则满足时，里程碑状态变为 `VERIFIED`。
 
-For the course MVP, the default rule is unanimous confirmation by all listed contributors.
+课程 MVP 默认采用：所有被列为 contributor 的成员都必须确认。
 
-### FR-07 Timeline
-Users can view milestones chronologically with on-chain verification status.
+### FR-07 项目时间线
+用户可以按时间顺序查看项目里程碑及其链上验证状态。
 
-### FR-08 Contribution dashboard
-Users can view aggregated contribution percentages and milestone counts.
+### FR-08 贡献统计面板
+用户可以查看成员累计贡献比例、参与里程碑数量等统计信息。
 
-### FR-09 Certificate issuance
-A verified project can generate per-member contribution certificates.
+### FR-09 贡献证明生成
+项目满足验证条件后，可以为成员生成个人贡献证明。
 
-### FR-10 Certificate verification
-An external verifier can enter a certificate ID and verify its ledger-backed record.
+### FR-10 贡献证明验证
+外部验证者可以输入 certificateId，验证其对应的链上记录。
 
-## 5. Non-functional requirements
+## 5. 非功能需求
 
-- Browser-based B/S application.
-- Responsive and visually consistent interface.
-- Core demo flow must work without editing ledger data manually.
-- Critical blockchain transactions must return clear success/error feedback.
-- Generated private keys, certificates, and secrets must not be committed.
-- Demo should be reproducible from documented setup commands.
+- 采用浏览器可访问的 B/S 架构。
+- 界面需要具备基本响应式能力和一致的视觉风格。
+- 核心演示流程不能依赖手工修改链上数据。
+- 关键区块链交易必须提供清楚的成功/失败反馈。
+- 不得提交生成的私钥、证书、秘密配置等敏感文件。
+- 开发环境应能够通过文档中的命令被其他组员复现。
 
-## 6. Out of scope for MVP
+## 6. MVP 暂不实现
 
-- Cryptocurrency or token incentives
-- NFT issuance
-- Payments
-- Cross-chain interoperability
-- Real-name identity verification
-- Production deployment or public consortium governance
-- Complex dispute arbitration
-- AI scoring of contributions
+- 加密货币或 Token 激励
+- NFT
+- 支付功能
+- 跨链互操作
+- 实名身份认证
+- 生产级联盟链治理
+- 复杂争议仲裁
+- AI 自动评估贡献
 
-## 7. Demo success criteria
+## 7. Demo 成功标准
 
-A 7-minute demo should be able to show:
+7 分钟左右的演示应能完成：
 
-1. Create a project.
-2. Submit a milestone and upload a file.
-3. Show its SHA-256 hash.
-4. Allocate contributions.
-5. Confirm contributions from team members.
-6. Show milestone as blockchain verified.
-7. View project timeline and contribution dashboard.
-8. Open a certificate verification page and receive a valid result.
+1. 创建一个项目。
+2. 提交一个里程碑并上传文件。
+3. 展示系统计算得到的 SHA-256。
+4. 为成员分配贡献比例。
+5. 不同成员完成贡献确认。
+6. 展示该里程碑状态变为 `VERIFIED`。
+7. 查看项目 Timeline 和 Contribution Dashboard。
+8. 打开贡献证明验证页面并得到有效结果。
