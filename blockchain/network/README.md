@@ -1,18 +1,18 @@
-# Local Fabric Network
+# 本地 Fabric 开发网络
 
-For development, ChainProof uses the official Hyperledger Fabric `test-network` as the baseline rather than committing generated network artifacts into this repository.
+ChainProof 开发阶段使用官方 Hyperledger Fabric `test-network` 作为基础，不把自动生成的网络文件复制进本仓库。
 
-## Recommended local workflow
+## 推荐本地流程
 
-1. Install the Hyperledger Fabric samples, binaries, and Docker images using the official Fabric documentation.
-2. From `fabric-samples/test-network`, start the network and create the default channel:
+1. 按官方 Fabric 文档安装 `fabric-samples`、相关二进制文件和 Docker 镜像。
+2. 进入 `fabric-samples/test-network`，启动网络并创建 ChainProof 使用的通道：
 
 ```bash
 ./network.sh down
 ./network.sh up createChannel -c chainproof
 ```
 
-3. Deploy the ChainProof JavaScript chaincode from this repository. A typical command shape is:
+3. 部署本仓库中的 JavaScript Chaincode。命令形式如下：
 
 ```bash
 ./network.sh deployCC \
@@ -22,27 +22,34 @@ For development, ChainProof uses the official Hyperledger Fabric `test-network` 
   -c chainproof
 ```
 
-4. Verify the chaincode package/deployment before wiring the backend Gateway connection.
+4. 在接入后端 Fabric Gateway 之前，先确认 Chaincode 已成功打包、安装并部署。
 
-## Shutdown
+## 关闭网络
 
 ```bash
 ./network.sh down
 ```
 
-## Important repository rule
+## 仓库安全规则
 
-Do **not** copy generated Fabric organizations, certificates, private keys, channel artifacts, or Docker data into this repository. They are local development artifacts and are excluded by `.gitignore`.
+不要把以下 Fabric 自动生成内容提交到本仓库：
+- organizations
+- 证书
+- 私钥
+- channel artifacts
+- Docker 数据
 
-## Week 1 acceptance check
+这些内容只属于本地开发环境，并已经通过 `.gitignore` 排除。
 
-A teammate should be able to:
+## Week 1 验收标准
 
-- clone ChainProof;
-- prepare the official Fabric test-network;
-- start channel `chainproof`;
-- deploy this repository's chaincode;
-- invoke at least `CreateProject` and `GetProject` successfully;
-- stop and restart the network using documented commands.
+任意一位组员应该能够根据文档完成：
 
-If local Fabric version differences require command changes, update this README with the exact commands the team has validated.
+- clone ChainProof 仓库；
+- 准备官方 Fabric test-network；
+- 启动 `chainproof` channel；
+- 部署本仓库 Chaincode；
+- 至少成功调用 `CreateProject` 和 `GetProject`；
+- 使用文档命令停止并重新启动网络。
+
+如果你们本机 Fabric 版本导致命令略有差异，请把最终真正验证通过的命令更新回这个 README，确保三个人使用同一套流程。
