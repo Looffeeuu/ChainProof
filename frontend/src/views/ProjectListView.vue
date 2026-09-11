@@ -46,7 +46,7 @@ const isEmpty = computed(() => data.value?.length === 0)
     <AsyncSection
       :loading="loading"
       :error="error"
-      :empty="data?.length === 0"
+      :empty="!data || data.length === 0"
       loading-text="正在读取项目…"
       error-title="没能读到项目列表"
       @retry="run"

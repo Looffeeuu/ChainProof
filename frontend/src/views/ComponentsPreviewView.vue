@@ -38,7 +38,7 @@ const demo = useAsync(async (mode) => {
   if (mode === 'error') return getProject('NOT-EXIST')   // 真的会抛 PROJECT_NOT_FOUND
   if (mode === 'empty') return []
   return listProjects()
-})
+}, { lazy: true })
 </script>
 
 <template>

@@ -24,7 +24,8 @@ const router = useRouter()
 
 const input = ref(String(route.params.id ?? ''))
 
-const { data: result, loading, error, run } = useAsync(verifyCertificate)
+// lazy：这一页要等用户输入编号才查，没有 id 时不该显示加载态
+const { data: result, loading, error, run } = useAsync(verifyCertificate, { lazy: true })
 
 // 带 ID 进来（证书上印的就是这种链接）就直接查，不用再点一次
 watch(() => route.params.id, (id) => {

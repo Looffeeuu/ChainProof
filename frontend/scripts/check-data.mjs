@@ -283,9 +283,23 @@ await check('确认导致状态变化后，txId 会换成新的那笔交易', as
 })
 
 // —— useAsync 的三态 ——
+// loading 默认从 true 开始。这不是随手定的默认值，是白屏事故的修复：
+// 首次渲染发生在 onMounted 之前，那时如果 loading 是 false，
+// 三个状态会同时为假，AsyncSection 就当数据已经到了，去读 null 的属性然后抛错——
+// 浏览器里的表现是整页空白。详见 useAsync.js 里的注释。
+await check('useAsync：loading 默认从 true 开始（数据还没到）', () => {
+  const { data, loading, error } = useAsync(api.listProjects)
+  assert(loading.value === true, '初始 loading 不是 true，白屏会再来一次')
+  assert(data.value === null && error.value === null, '初始 data / error 不对')
+})
+
+await check('useAsync：lazy 时 loading 从 false 开始（等用户触发）', () => {
+  const { loading } = useAsync(api.listProjects, { lazy: true })
+  assert(loading.value === false, 'lazy 时初始 loading 应当是 false')
+})
+
 await check('useAsync：成功路径 loading 起落、data 有值、error 为空', async () => {
   const { data, loading, error, run } = useAsync(api.listProjects)
-  assert(loading.value === false && data.value === null, '初始状态不对')
   const p = run()
   assert(loading.value === true, '调用后 loading 没有变 true')
   await p
