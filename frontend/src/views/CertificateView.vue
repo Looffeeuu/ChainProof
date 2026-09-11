@@ -82,7 +82,13 @@ function print() {
           <EmptyState
             title="没有这份证书"
             description="链接里的证书编号可能拼错了，或者这份证书已经不存在。"
-          />
+          >
+            <!-- 空状态里必须给一条出路。项目详情页同样的位置有「回到项目列表」，
+                 这里原先只有一句说明，人读完就卡住了 -->
+            <template #action>
+              <BaseButton variant="primary" @click="$router.push('/')">回到概览</BaseButton>
+            </template>
+          </EmptyState>
         </BaseCard>
       </template>
 

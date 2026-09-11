@@ -8,11 +8,13 @@ import StatusBadge from '../components/base/StatusBadge.vue'
 import HashText from '../components/base/HashText.vue'
 import ErrorNotice from '../components/base/ErrorNotice.vue'
 import FileHashCheck from '../components/base/FileHashCheck.vue'
+import HelpTip from '../components/base/HelpTip.vue'
 import AsyncSection from '../components/base/AsyncSection.vue'
 import ClaimTable from '../components/milestone/ClaimTable.vue'
 import ConfirmProgress from '../components/milestone/ConfirmProgress.vue'
 import { useAsync } from '../composables/useAsync.js'
 import { getMilestone, confirmMilestone } from '../api/milestones.js'
+import { getProject } from '../api/projects.js'
 import { formatDateTime } from '../utils/format-time.js'
 import { session } from '../stores/session.js'
 import { confirmGate } from '../utils/confirm-gate.js'
@@ -25,7 +27,24 @@ import { confirmGate } from '../utils/confirm-gate.js'
  */
 const route = useRoute()
 
-const { data: milestone, loading, error, run } = useAsync(getMilestone)
+/**
+ * 面包屑上要显示项目名，而里程碑对象里只有 projectId。
+ * 单独取一次项目，取不到就退回显示 ID——面包屑是次要信息，
+ * 不该因为这个附带请求失败而让整页报错。
+ */
+const projectName = ref('')
+
+async function load(milestoneId) {
+  const found = await getMilestone(milestoneId)
+  try {
+    projectName.value = (await getProject(found.projectId)).name
+  } catch {
+    projectName.value = ''
+  }
+  return found
+}
+
+const { data: milestone, loading, error, run } = useAsync(load)
 watch(() => route.params.id, (id) => id && run(id), { immediate: true })
 
 const me = computed(() => session.currentMemberId)
@@ -113,7 +132,7 @@ async function decide(decision) {
       <RouterLink to="/projects">项目</RouterLink>
       <span aria-hidden="true">/</span>
       <RouterLink v-if="milestone" :to="`/projects/${milestone.projectId}`">
-        {{ milestone.projectId }}
+        {{ projectName || milestone.projectId }}
       </RouterLink>
       <span aria-hidden="true">/</span>
       <span>贡献确认</span>
@@ -153,8 +172,11 @@ async function decide(decision) {
           <dd><HashText :value="milestone.fileHash" full label="文件哈希" /></dd>
         </dl>
         <p class="t-small t-soft check-intro">
-          核对这串哈希，就能确认对方存证的文件和你手上的是同一份——
-          文件差一个字节，哈希就完全不同。用下面这个直接核，不用自己去算。
+          核对你手上的那份文件是不是同一份。
+          <HelpTip title="为什么比哈希就够">
+            哈希是文件内容的指纹。改动一个字节，这串数就完全不同，
+            所以两边哈希一致就说明是同一份文件。文件不会上传，计算在你的浏览器里完成。
+          </HelpTip>
         </p>
 
         <!-- 这句话以前只是一句话，没有配套的工具，读者要么信要么自己装命令行。
@@ -201,8 +223,7 @@ async function decide(decision) {
             记在 {{ me }} 名下。与实际情况相符吗？
           </p>
           <p class="t-small t-soft note">
-            全体成员都确认后，这条记录会写入存证；任何一人拒绝，整条声明作废，需要重新提交。
-            表态之后不能撤回。
+            全员确认后写入存证，一人拒绝则整条作废。<strong>表态不能撤回。</strong>
           </p>
           <div class="actions">
             <BaseButton

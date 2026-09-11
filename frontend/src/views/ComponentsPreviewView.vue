@@ -46,7 +46,7 @@ const demo = useAsync(async (mode) => {
     <PageHeader
       eyebrow="开发用"
       title="基础组件预览"
-      description="spec/01 §2.6 的组件规格落地后的样子。每个组件的全部状态都摆在这一页，改样式后对照检查。"
+      description="每个基础组件的全部状态都摆在这一页，改样式后对照检查。"
     />
 
     <BaseCard class="block">

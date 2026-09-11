@@ -10,7 +10,7 @@ const route = useRoute()
     <PageHeader
       eyebrow="404"
       title="这个地址没有对应的页面"
-      :description="`${route.fullPath} 不在路由表里。可能是链接拼错，或者这条记录已经不在了。`"
+      :description="`${route.fullPath} 不存在。`"
     />
     <p><RouterLink to="/">返回概览</RouterLink></p>
   </div>

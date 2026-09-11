@@ -115,7 +115,15 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
           <BaseButton variant="ghost" @click="$router.push('/projects')">全部项目</BaseButton>
         </template>
 
-        <ul class="feed">
+        <!-- 有项目但一条里程碑都没有，是个正常状态（刚建完项目就是这样）。
+             不给空状态的话，这张卡只剩一个标题，下面一片空白，看起来像坏了 -->
+        <EmptyState
+          v-if="data.recent.length === 0"
+          title="还没有里程碑"
+          description="往项目里提交第一份成果后，它会出现在这里。"
+        />
+
+        <ul v-else class="feed">
           <li v-for="m in data.recent" :key="m.milestoneId" class="feed-item">
             <div class="feed-main">
               <RouterLink :to="`/milestones/${m.milestoneId}`" class="feed-title">
@@ -143,7 +151,7 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
         <EmptyState
           v-if="data.certificates.length === 0"
           title="还没有签发过贡献证明"
-          description="当一个项目里有里程碑通过全员确认后，就可以为成员签发贡献证明。它是一张可以打印、也可以让任何人公开核验的凭证。"
+          description="项目里有里程碑通过全员确认后，就可以为成员签发。"
         />
 
         <ul v-else class="feed">

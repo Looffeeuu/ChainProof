@@ -36,7 +36,7 @@ const isEmpty = computed(() => data.value?.length === 0)
     <PageHeader
       eyebrow="项目"
       title="项目"
-      description="你参与的全部项目。里程碑计数里的「已验证」指全体成员都确认过、并已写入存证的那些。"
+      description="你参与的全部项目。"
     >
       <template #actions>
         <BaseButton :variant="isEmpty ? 'secondary' : 'primary'" @click="$router.push('/projects/new')">创建项目</BaseButton>

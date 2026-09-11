@@ -5,6 +5,8 @@ import { session } from '../stores/session.js'
 import { useAsync } from '../composables/useAsync.js'
 import { useMainFocus } from '../composables/useMainFocus.js'
 import { listProjects } from '../api/projects.js'
+import { isDev } from '../stores/settings.js'
+import SettingsMenu from '../components/base/SettingsMenu.vue'
 
 const route = useRoute()
 
@@ -37,10 +39,11 @@ const groups = computed(() => [
     // 之前这里写死过一个 CERT-P001-ALICE，接真接口就会 404。
     items: [{ key: 'verify', to: '/verify', label: '公开验证' }]
   },
-  {
-    label: '开发',
-    items: [{ key: 'dev-components', to: '/dev/components', label: '组件预览' }]
-  }
+  // 组件预览是开发页，用户视角下不该出现在导航里。
+  // 用 filter 而不是 v-if：空的分组连标题一起消失，不会留一个空的「开发」眉标
+  ...(isDev()
+    ? [{ label: '开发', items: [{ key: 'dev-components', to: '/dev/components', label: '组件预览' }] }]
+    : [])
 ])
 
 // 高亮的依据是 meta.nav，不是路径前缀。
@@ -56,10 +59,13 @@ const activeNav = computed(() => route.meta.nav ?? route.name ?? '')
 
     <!-- 打印时侧栏不进纸：证书页要能直接 Ctrl+P（styles/base.css 的 @media print） -->
     <aside class="sidebar" data-print="hide">
-      <RouterLink to="/" class="brand">
-        <span class="brand-mark" aria-hidden="true">◇</span>
-        <span class="brand-name">ChainProof</span>
-      </RouterLink>
+      <div class="head">
+        <RouterLink to="/" class="brand">
+          <span class="brand-mark" aria-hidden="true">◇</span>
+          <span class="brand-name">ChainProof</span>
+        </RouterLink>
+        <SettingsMenu />
+      </div>
 
       <nav class="nav" aria-label="主导航">
         <div v-for="group in groups" :key="group.label" class="group">
@@ -78,24 +84,9 @@ const activeNav = computed(() => route.meta.nav ?? route.name ?? '')
         </div>
       </nav>
 
-      <div class="session">
-        <p class="t-label">演示身份</p>
-        <div class="session-btns">
-          <button
-            v-for="m in session.members"
-            :key="m"
-            type="button"
-            class="session-btn t-small"
-            :aria-pressed="session.currentMemberId === m"
-            @click="session.switchTo(m)"
-          >
-            {{ m }}
-          </button>
-        </div>
-        <p class="t-small hint">
-          切换身份可以看到同一条记录在不同成员眼里的样子——待确认的里程碑只对声明里的人显示确认按钮。
-        </p>
-      </div>
+      <!-- 身份切换器搬进了齿轮。它原先常驻在这里，加上一段解释文字，
+           占掉侧栏底部一大块，而它是个偶尔才用一次的开关 -->
+      <p class="t-small t-soft who">当前身份 <strong>{{ session.currentMemberId }}</strong></p>
     </aside>
 
     <main id="main" ref="main" tabindex="-1" class="content">
@@ -157,24 +148,9 @@ const activeNav = computed(() => route.meta.nav ?? route.name ?? '')
 .count { color: var(--c-text-soft); }
 .nav-item.is-active .count { color: var(--c-primary); }
 
-.session { display: grid; gap: var(--sp-2); }
-.session-btns { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
+.head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
 
-.session-btn {
-  padding: var(--sp-1) var(--sp-2);
-  border: 1px solid var(--c-border-subtle);
-  border-radius: var(--r-sm);
-  background: var(--c-surface);
-  color: var(--c-text-soft);
-}
-.session-btn[aria-pressed='true'] {
-  border-color: var(--c-primary);
-  background: var(--c-primary-weak);
-  color: var(--c-primary);
-  font-weight: 600;
-}
-
-.hint { color: var(--c-text-soft); line-height: 1.4; }
+.who strong { color: var(--c-text); font-weight: 600; }
 
 .content {
   width: 100%;
@@ -204,8 +180,8 @@ const activeNav = computed(() => route.meta.nav ?? route.name ?? '')
   .group { flex-direction: row; gap: var(--sp-1); }
   .group-label { display: none; }
   .nav-item { padding: var(--sp-2); white-space: nowrap; }
-  .session { grid-auto-flow: column; align-items: center; gap: var(--sp-2); }
-  .hint { display: none; }
+  .head { gap: var(--sp-3); }
+  .who { white-space: nowrap; }
 
   .content { padding: var(--sp-5) var(--sp-4) var(--sp-7); }
 }

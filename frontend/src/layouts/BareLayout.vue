@@ -19,11 +19,15 @@ const main = useMainFocus()
     <a class="skip-link" href="#main">跳到主要内容</a>
 
     <header class="topbar" data-print="hide">
-      <RouterLink to="/verify" class="brand">
+      <!-- 品牌链接必须指向应用首页，不能指向 /verify。
+           指向自己的话这一页就成了死胡同：从证书页点「去验证这份证书」进来的人，
+           点哪儿都回不去，只能按浏览器后退。 -->
+      <RouterLink to="/" class="brand">
         <span class="brand-mark" aria-hidden="true">◇</span>
         <span class="brand-name">ChainProof</span>
       </RouterLink>
-      <span class="t-small t-soft">贡献存证的公开验证</span>
+      <span class="t-small t-soft tagline">贡献存证的公开验证</span>
+      <RouterLink to="/" class="t-small back">返回 ChainProof</RouterLink>
     </header>
 
     <main id="main" ref="main" tabindex="-1" class="content">
@@ -55,6 +59,14 @@ const main = useMainFocus()
 .brand:hover { text-decoration: none; }
 .brand-mark { color: var(--c-primary); font-size: 20px; }
 .brand-name { letter-spacing: -0.01em; }
+
+.tagline { flex: 1; }
+.back { flex-shrink: 0; }
+
+@media (max-width: 560px) {
+  /* 窄屏上三样挤不下。标语是装饰，出口不是——先舍标语 */
+  .tagline { display: none; }
+}
 
 .content {
   flex: 1;

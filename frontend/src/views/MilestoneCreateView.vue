@@ -9,6 +9,7 @@ import FormField from '../components/base/FormField.vue'
 import AsyncSection from '../components/base/AsyncSection.vue'
 import ContributionAllocator from '../components/milestone/ContributionAllocator.vue'
 import HashText from '../components/base/HashText.vue'
+import HelpTip from '../components/base/HelpTip.vue'
 import { useAsync } from '../composables/useAsync.js'
 import { getProject } from '../api/projects.js'
 import { createMilestone } from '../api/milestones.js'
@@ -149,7 +150,7 @@ async function submit() {
     <PageHeader
       eyebrow="里程碑"
       title="提交里程碑"
-      description="提交一份成果文件，并声明每位成员在这份成果里的贡献比例。声明要经全体成员确认后才会写入存证。"
+      description="提交成果文件，并声明每位成员的贡献比例。"
     />
 
     <AsyncSection
@@ -169,7 +170,7 @@ async function submit() {
               v-slot="f"
               label="标题"
               required
-              hint="这次提交的是什么。写得具体一点，它会出现在时间线上。"
+              hint="会出现在项目时间线上。"
               :error="touched.title ? errors.title : ''"
             >
               <input
@@ -186,7 +187,7 @@ async function submit() {
             <FormField
               v-slot="f"
               label="说明"
-              hint="做了哪些改动、和上一版的差别。确认的人靠这段判断比例合不合理。"
+              hint="做了哪些改动、和上一版的差别。"
               :error="errors.description"
             >
               <textarea
@@ -203,7 +204,7 @@ async function submit() {
               v-slot="f"
               label="成果文件"
               required
-              hint="文件会上传保存，供团队成员之后取用；写入存证的是它的 SHA-256 摘要，不是文件本身。"
+              hint="文件会上传保存，供团队成员之后取用。"
               :error="touched.file ? errors.file : ''"
             >
               <input :id="f.id" type="file" :aria-describedby="f.describedBy" @change="pickFile" />
@@ -232,8 +233,10 @@ async function submit() {
         <BaseCard>
           <template #title><h2>贡献比例</h2></template>
           <p class="t-small t-soft intro">
-            总和必须正好是 100%。填不对时提交按钮不可用。
-            比例为 0 的成员不会进入这份声明，也不需要他确认。
+            总和必须正好是 100%。
+            <HelpTip title="比例为 0 的成员">
+              不会进入这份声明，也不需要他确认。
+            </HelpTip>
           </p>
 
           <ContributionAllocator v-model="contributors" />

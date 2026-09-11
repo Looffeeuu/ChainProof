@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '../components/base/PageHeader.vue'
 import BaseCard from '../components/base/BaseCard.vue'
@@ -20,6 +20,26 @@ const form = reactive({
   // 负责人默认参与，且不能被取消——一个没有负责人的项目没有意义
   members: [session.currentMemberId]
 })
+
+/**
+ * 负责人跟着当前身份走。
+ *
+ * 这里必须是 watch 而不是初始化一次：`ownerId` 是提交那一刻才读
+ * `session.currentMemberId` 的，而 `members` 如果只在 setup 时取一次，
+ * 中途切身份就会造出「负责人不在成员名单里」的项目——
+ * 而且新身份那个复选框是 disabled 的（因为它是当前身份），
+ * 用户想勾也勾不上，界面上完全没有出路。
+ *
+ * 换过去的人自动加进名单；换走的人**不自动移除**——
+ * 他可能确实要参与，而且现在他的复选框不再 disabled，取消得掉。
+ */
+watch(
+  () => session.currentMemberId,
+  (now) => {
+    if (!form.members.includes(now)) form.members.push(now)
+  },
+  { immediate: true }
+)
 
 // 哪些字段已经被碰过。没碰过的字段不显示校验信息：
 // 一进页面就满屏红字，等于在指责用户还没开始填
@@ -85,7 +105,7 @@ async function submit() {
     <PageHeader
       eyebrow="项目"
       title="创建项目"
-      description="项目建好之后，成员就可以往里面提交里程碑，并为彼此的贡献比例投票确认。"
+      description="建好之后就可以往里面提交里程碑。"
     />
 
     <BaseCard class="form-card">
@@ -111,7 +131,7 @@ async function submit() {
         <FormField
           v-slot="f"
           label="项目描述"
-          hint="这个项目要做什么、成果是什么。可以留空，之后再补。"
+          hint="可以留空，之后再补。"
           :error="errors.description"
         >
           <textarea
@@ -127,7 +147,7 @@ async function submit() {
         <FormField
           label="成员"
           required
-          hint="勾选参与这个项目的人。负责人（当前演示身份）默认参与。"
+          hint="负责人默认参与，不能取消。"
           :error="touched.members ? errors.members : ''"
         >
           <div class="members">
