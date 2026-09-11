@@ -1,17 +1,41 @@
 import { randomUUID } from 'node:crypto'
 import { evaluateTransaction, submitTransaction } from '../services/fabric.service.js'
 
+function currentMemberId(req) {
+  const headerValue = req.get('X-Member-Id')
+  return typeof headerValue === 'string' && headerValue.trim() ? headerValue.trim() : null
+}
+
+export async function listProjects(req, res, next) {
+  try {
+    const memberId = currentMemberId(req)
+    const projects = memberId
+      ? await evaluateTransaction('GetProjectsByMember', memberId)
+      : await evaluateTransaction('GetAllProjects')
+
+    res.json(Array.isArray(projects) ? projects : [])
+  } catch (error) {
+    next(error)
+  }
+}
+
 export async function createProject(req, res, next) {
   try {
-    const { name, description = '', ownerId, members } = req.body
+    const { name, description = '', members } = req.body
+    const ownerId = currentMemberId(req) || req.body.ownerId
 
     if (!name || !ownerId || !Array.isArray(members) || members.length === 0) {
       return res.status(400).json({
         error: {
           code: 'VALIDATION_ERROR',
-          message: 'name、ownerId 和非空 members 为必填项。'
+          message: '项目名称、负责人身份和非空成员列表为必填项。'
         }
       })
+    }
+
+    const normalizedMembers = [...new Set(members.map(String))]
+    if (!normalizedMembers.includes(ownerId)) {
+      normalizedMembers.unshift(ownerId)
     }
 
     const projectId = req.body.projectId || `P-${randomUUID()}`
@@ -21,10 +45,10 @@ export async function createProject(req, res, next) {
       name,
       description,
       ownerId,
-      JSON.stringify(members)
+      JSON.stringify(normalizedMembers)
     )
 
-    res.status(201).json({ data: project })
+    res.status(201).json(project)
   } catch (error) {
     next(error)
   }
@@ -33,7 +57,7 @@ export async function createProject(req, res, next) {
 export async function getProject(req, res, next) {
   try {
     const project = await evaluateTransaction('GetProject', req.params.projectId)
-    res.json({ data: project })
+    res.json(project)
   } catch (error) {
     next(error)
   }
