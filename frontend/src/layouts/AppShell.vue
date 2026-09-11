@@ -5,7 +5,6 @@ import { session } from '../stores/session.js'
 import { useAsync } from '../composables/useAsync.js'
 import { useMainFocus } from '../composables/useMainFocus.js'
 import { listProjects } from '../api/projects.js'
-import { listCertificates } from '../api/certificates.js'
 
 const route = useRoute()
 
@@ -18,8 +17,8 @@ const main = useMainFocus()
  * 它们靠路由的 meta.nav 归到某一组底下，打开时那一项照样高亮。
  */
 const { data: counts, run: loadCounts } = useAsync(async () => {
-  const [projects, certificates] = await Promise.all([listProjects(), listCertificates()])
-  return { projects: projects.length, certificates: certificates.length }
+  const projects = await listProjects()
+  return { projects: projects.length }
 })
 onMounted(loadCounts)
 
@@ -33,8 +32,8 @@ const groups = computed(() => [
   },
   {
     label: '存证',
-    // 没有「证书列表」这一页（spec/03 §3.3 里那个接口还没有），
-    // 所以侧栏不放证书入口——证书从概览页那张列表进去。
+    // 侧栏不放证书入口：证书是「某个人在某个项目里的」，不是一个全局列表，
+    // 从概览页那张列表或项目详情页进去更顺。
     // 之前这里写死过一个 CERT-P001-ALICE，接真接口就会 404。
     items: [{ key: 'verify', to: '/verify', label: '公开验证' }]
   },
