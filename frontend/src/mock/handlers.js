@@ -219,8 +219,11 @@ export async function createCertificate(projectId, { memberId } = {}) {
     (m) => m.projectId === projectId && m.status === 'VERIFIED'
   )
   if (verified.length === 0) {
+    // 用 VALIDATION_ERROR 而不是自己起一个码：docs/API.md 的错误码表里
+    // 没有给这种情况专门的码，普通参数校验失败一律归到它。
+    // 假接口要产出真接口会产出的东西，不然错误分支测的是一个不存在的情况。
     throw fail(
-      'NO_VERIFIED_MILESTONE',
+      'VALIDATION_ERROR',
       '这个项目还没有任何一条里程碑通过全员确认，暂时不能签发贡献证明。'
     )
   }

@@ -236,7 +236,7 @@ await check('没有已验证里程碑时不能签发证书', async () => {
     await api.createCertificate('P003', { memberId: 'charlie' })  // P003 一条里程碑都没有
     throw new Error('本该被拒绝')
   } catch (e) {
-    assert(e.code === 'NO_VERIFIED_MILESTONE', `code 是 ${e.code}`)
+    assert(e.code === 'VALIDATION_ERROR', `code 是 ${e.code}`)
     return `${e.code} / ${e.message}`
   }
 })
