@@ -2,6 +2,13 @@
  * 假数据。字段严格照 spec/02 §2 的四张表，只有那些字段，不多不少——
  * 多造一个字段，页面就可能用上它，等接真接口时才发现它根本不存在。
  *
+ * 2026-09-11 按 B、C 线的答复对齐（spec/03 §5、§9）：
+ * - Milestone 与 Certificate 都多了 `txId`，是 Fabric 的交易 ID，64 位十六进制。
+ *   里程碑的 txId 对应「最近一次让它进入当前状态」的那笔交易，
+ *   所以确认导致状态变化时它会被更新，不是创建时就固定。
+ * - Certificate 的 `verificationStatus` 取值是 `VALID` / `NOT_FOUND`，
+ *   **不是 `VERIFIED`**——后者是 Milestone.status 的取值，两者同形不同义。
+ *
  * 内容与 ../../../../界面预览.html 里的四屏样张一致，这样页面做出来
  * 和样张能直接对照。三个项目分别覆盖三种情况：有待确认的、全部已验证的、一条里程碑都没有的。
  */
@@ -59,7 +66,8 @@ export const milestones = [
       { memberId: 'bob', decision: 'CONFIRMED', timestamp: '2026-09-09T08:41:00.000Z' }
     ],
     createdAt: '2026-09-09T06:22:00.000Z',
-    status: 'PENDING_CONFIRMATION'
+    status: 'PENDING_CONFIRMATION',
+    txId: '799ee73cfb2737263c98c122d67e53f472789361dbe8843cec2260608246cc07'
   },
   {
     milestoneId: 'M003',
@@ -77,7 +85,8 @@ export const milestones = [
       { memberId: 'bob', decision: 'REJECTED', timestamp: '2026-09-07T02:10:00.000Z' }
     ],
     createdAt: '2026-09-07T01:15:00.000Z',
-    status: 'REJECTED'
+    status: 'REJECTED',
+    txId: '6105d78cbf33b575210dda62272f3232daa2eea5d80d970391df609f1f044da2'
   },
   {
     milestoneId: 'M002',
@@ -97,7 +106,8 @@ export const milestones = [
       { memberId: 'charlie', decision: 'CONFIRMED', timestamp: '2026-09-05T05:47:00.000Z' }
     ],
     createdAt: '2026-09-05T02:08:00.000Z',
-    status: 'VERIFIED'
+    status: 'VERIFIED',
+    txId: '9ab2108eaed25cebdf0ea9f2ade44b12ddbde54ede41cbf556e5ab0e2ea2e1c7'
   },
   {
     milestoneId: 'M001',
@@ -117,7 +127,8 @@ export const milestones = [
       { memberId: 'charlie', decision: 'CONFIRMED', timestamp: '2026-09-02T01:19:00.000Z' }
     ],
     createdAt: '2026-09-01T13:40:00.000Z',
-    status: 'VERIFIED'
+    status: 'VERIFIED',
+    txId: 'ca9f82ce8b5c8ca65e382d2a60658db8db121f0fc83fa9a39c8c48a9276d4ecf'
   },
   {
     milestoneId: 'M101',
@@ -137,7 +148,8 @@ export const milestones = [
       { memberId: 'charlie', decision: 'CONFIRMED', timestamp: '2026-08-21T09:12:00.000Z' }
     ],
     createdAt: '2026-08-21T00:40:00.000Z',
-    status: 'VERIFIED'
+    status: 'VERIFIED',
+    txId: '7a9182d5b1a371595c5ee049bee9bcaa00ff5b9854e98151a0ca7a86da12ce4c'
   }
 ]
 
@@ -149,7 +161,8 @@ export const certificates = [
     contributionPercentage: 44,
     milestoneIds: ['M001', 'M002'],
     issuedAt: '2026-09-06T01:00:00.000Z',
-    verificationStatus: 'VERIFIED'
+    verificationStatus: 'VALID',
+    txId: 'd7c32d24113569621cd9879ea1043962d8d8cf05adcfc0de053e5eb067767252'
   },
   {
     certificateId: 'CERT-P002-BOB',
@@ -158,6 +171,7 @@ export const certificates = [
     contributionPercentage: 33,
     milestoneIds: ['M101'],
     issuedAt: '2026-08-22T03:00:00.000Z',
-    verificationStatus: 'VERIFIED'
+    verificationStatus: 'VALID',
+    txId: '6900a37590e3c406483871ce0ebf11d7211dd8a51829915669ce1410477451f4'
   }
 ]

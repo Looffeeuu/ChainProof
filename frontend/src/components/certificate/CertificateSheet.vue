@@ -63,6 +63,13 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
       </div>
     </dl>
 
+    <!-- 链上交易 ID：这张纸声称的东西，凭据在这里。
+         印在证书上，拿到纸质件的人也能自己去账本上核（spec/03 §5） -->
+    <div v-if="certificate.txId" class="tx">
+      <span class="t-label">链上交易</span>
+      <HashText :value="certificate.txId" :keep="16" label="链上交易 ID" />
+    </div>
+
     <footer class="foot">
       <p class="t-small t-soft">任何人都可以在下列地址核验这份证书的真伪，不需要登录：</p>
       <p class="t-small t-mono url">{{ verifyUrl }}</p>
@@ -127,6 +134,14 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
 }
 .meta dt { margin-bottom: var(--sp-1); }
 .meta dd { margin: 0; min-width: 0; }
+
+.tx {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-5);
+}
 
 .foot { padding-top: var(--sp-4); border-top: 1px solid var(--c-border-subtle); }
 .url { word-break: break-all; margin-top: var(--sp-1); }

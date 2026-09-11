@@ -32,10 +32,16 @@ export const createMilestone = (projectId, payload) => {
 }
 
 /**
- * 提交一次确认，返回更新后的完整 Milestone。
- * 真接口给不了完整对象时，适配写在这一行，视图不动（spec/02 §5.2 规则 1）。
+ * 提交一次确认，返回**更新后的完整 Milestone**（C 线已确认按此返回，spec/03 §4.4）。
+ *
+ * 注意真接口的请求体**只有 `decision`**——表态的人是谁由请求头 `X-Member-Id` 决定，
+ * 不在 body 里重复一遍。两处都写的话，一旦不一致就说不清以哪个为准。
+ * 假接口拿不到请求头，所以显式收一个 memberId。
+ *
+ * @param {string} milestoneId
+ * @param {{memberId: string, decision: 'CONFIRMED'|'REJECTED'}} payload
  */
-export const confirmMilestone = (milestoneId, decision) =>
+export const confirmMilestone = (milestoneId, payload) =>
   useMock
-    ? mock.confirmMilestone(milestoneId, decision)
-    : post(`/milestones/${milestoneId}/confirmations`, decision)
+    ? mock.confirmMilestone(milestoneId, payload)
+    : post(`/milestones/${milestoneId}/confirmations`, { decision: payload.decision })

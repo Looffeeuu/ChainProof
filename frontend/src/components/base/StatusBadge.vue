@@ -21,7 +21,12 @@ const MAP = {
   // Project.status 目前只见过 ACTIVE（spec/02 §2.3）
   ACTIVE: { text: '进行中', mark: '●', tone: 'neutral' },
   // Confirmation.decision 的两个取值，与里程碑状态同形不同义
-  CONFIRMED: { text: '已确认', mark: '●', tone: 'verified' }
+  CONFIRMED: { text: '已确认', mark: '●', tone: 'verified' },
+  // Certificate.verificationStatus 的两个取值（spec/02 §2.3）。
+  // 注意证书用的是 VALID 不是 VERIFIED——VERIFIED 是里程碑的状态，
+  // 两者同形不同义，别混用
+  VALID: { text: '证书有效', mark: '●', tone: 'verified' },
+  NOT_FOUND: { text: '查无此证', mark: '○', tone: 'neutral' }
 }
 
 const view = computed(

@@ -30,9 +30,26 @@ const db = {
   certificates: clone(certificates)
 }
 
-export async function listProjects() {
+/** 造一个 64 位十六进制的假交易 ID。真接口给的是 Fabric 的 transaction ID */
+function fakeTxId() {
+  let hex = ''
+  while (hex.length < 64) hex += Math.floor(Math.random() * 16).toString(16)
+  return hex
+}
+
+/**
+ * 项目列表。
+ *
+ * C 线的规则（spec/03 §6）：带了 `X-Member-Id` 就只返回这个人参与的项目，
+ * 没带就返回全部（演示 / 调试的降级模式）。假接口照同一口径实现——
+ * 否则切到真接口那天，「切换身份看到的项目不一样」这个行为会突然冒出来。
+ */
+export async function listProjects(memberId) {
   await delay()
-  return clone(db.projects)
+  const list = memberId
+    ? db.projects.filter((p) => p.members.includes(memberId))
+    : db.projects
+  return clone(list)
 }
 
 export async function getProject(projectId) {
@@ -92,7 +109,9 @@ export async function createMilestone(projectId, payload) {
     contributors: clone(payload.contributors ?? []),
     confirmations: [],
     createdAt: new Date().toISOString(),
-    status: 'PENDING_CONFIRMATION'
+    status: 'PENDING_CONFIRMATION',
+    // 真接口给的是这次写入 Fabric 的交易 ID（spec/03 §5）
+    txId: fakeTxId()
   }
   db.milestones.push(created)
   return clone(created)
@@ -120,12 +139,15 @@ export async function confirmMilestone(milestoneId, { memberId, decision }) {
 
   found.confirmations.push({ memberId, decision, timestamp: new Date().toISOString() })
 
-  // 一人拒绝即整条拒绝；全员确认才验证通过
+  // 一人拒绝即整条拒绝；全员确认才验证通过（spec/03 §4.2，B 线已按此实现）
   if (decision === 'REJECTED') {
     found.status = 'REJECTED'
   } else if (found.confirmations.length === found.contributors.length) {
     found.status = 'VERIFIED'
   }
+  // 状态变了就换一个新的 txId：里程碑上挂的那个，指的是
+  // 「最近一次让它进入当前状态」的那笔交易，不是创建时那笔（spec/03 §5）
+  found.txId = fakeTxId()
   return clone(found)
 }
 
@@ -157,15 +179,80 @@ export async function getCertificate(certificateId) {
   return clone(found)
 }
 
-export async function listCertificates() {
+/** 证书列表。两个筛选参数都可选（spec/03 §8.1） */
+export async function listCertificates({ projectId, memberId } = {}) {
   await delay()
-  return clone(db.certificates)
+  return clone(
+    db.certificates.filter(
+      (c) =>
+        (!projectId || c.projectId === projectId) &&
+        (!memberId || c.memberId === memberId)
+    )
+  )
 }
 
+/**
+ * 签发贡献证明（spec/03 §8.2、§8.3）。
+ *
+ * 两个前置条件：这个人得是项目成员，项目里得至少有一条已验证的里程碑。
+ * 前端据此决定按钮什么时候可以点，但这里仍然再判一次——
+ * 页面判断失误时要能被接口拦住，而不是造出一张没有依据的证书。
+ *
+ * **幂等**：同一个 projectId + memberId 重复请求，返回已有的那张，
+ * 不新签一张。所以演示时多点几次不会生出一堆重复证书。
+ */
+export async function createCertificate(projectId, { memberId } = {}) {
+  await delay()
+  const project = db.projects.find((p) => p.projectId === projectId)
+  if (!project) throw fail('PROJECT_NOT_FOUND', `没有找到项目 ${projectId}。`, 404)
+
+  if (!project.members.includes(memberId)) {
+    throw fail('MEMBER_NOT_IN_CLAIM', `${memberId} 不是项目 ${projectId} 的成员。`, 403)
+  }
+
+  const existing = db.certificates.find(
+    (c) => c.projectId === projectId && c.memberId === memberId
+  )
+  if (existing) return clone(existing)
+
+  const verified = db.milestones.filter(
+    (m) => m.projectId === projectId && m.status === 'VERIFIED'
+  )
+  if (verified.length === 0) {
+    throw fail(
+      'NO_VERIFIED_MILESTONE',
+      '这个项目还没有任何一条里程碑通过全员确认，暂时不能签发贡献证明。'
+    )
+  }
+
+  // 比例只按已验证的里程碑算，与贡献面板同一口径（spec/03 §8.4）
+  const { members } = await getContributions(projectId)
+  const share = members.find((m) => m.memberId === memberId)?.percentage ?? 0
+
+  const created = {
+    certificateId: `CERT-${projectId}-${String(memberId).toUpperCase()}`,
+    projectId,
+    memberId,
+    contributionPercentage: share,
+    milestoneIds: verified.map((m) => m.milestoneId),
+    issuedAt: new Date().toISOString(),
+    verificationStatus: 'VALID',
+    txId: fakeTxId()
+  }
+  db.certificates.push(created)
+  return clone(created)
+}
+
+/**
+ * 公开验证（spec/03 §9）。
+ *
+ * 查不到**不抛错**，返回 200 + `verificationStatus: 'NOT_FOUND'`——
+ * 「查无此证」是一次有效的验证结果，不是接口错误。
+ * 查得到时这个字段是 `VALID`，注意它和 Milestone.status 的 `VERIFIED` 不是一回事。
+ */
 export async function verifyCertificate(certificateId) {
   await delay()
   const found = db.certificates.find((c) => c.certificateId === certificateId)
-  // 验证接口对不存在的 ID 不该抛错——「查无此证」本身就是一个有效的验证结果
   if (!found) return { certificateId, verificationStatus: 'NOT_FOUND' }
-  return { ...clone(found), verificationStatus: found.verificationStatus }
+  return clone(found)
 }

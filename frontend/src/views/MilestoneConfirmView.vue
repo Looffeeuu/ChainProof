@@ -91,8 +91,9 @@ async function decide(decision) {
   deciding.value = decision
   decideError.value = null
   try {
-    // 假接口返回更新后的完整 Milestone（spec/02 §5.1 里问 C 线的第 2 条），
-    // 直接写回本地状态，徽章与进度立刻变化，不用再发一次请求
+    // 接口返回更新后的完整 Milestone（C 线已确认按此实现，spec/03 §4.4），
+    // 直接写回本地状态，徽章、进度和 txId 立刻变化，不用再发一次请求。
+    // memberId 只有假接口用得上——真接口靠请求头 X-Member-Id 认人
     milestone.value = await confirmMilestone(route.params.id, {
       memberId: me.value,
       decision
@@ -132,6 +133,15 @@ async function decide(decision) {
         提交于 {{ formatDateTime(milestone.createdAt) }}
         <StatusBadge :status="milestone.status" />
         <ConfirmProgress :milestone="milestone" />
+      </p>
+
+      <!-- 徽章说「链上已验证」，这一行就是它的依据。
+           txId 指向最近一次让这条记录进入当前状态的那笔 Fabric 交易，
+           所以每次有人表态、状态发生变化，它都会换一个（spec/03 §5）。 -->
+      <p v-if="milestone.txId" class="t-small t-soft tx-line">
+        <span class="t-label">链上交易</span>
+        <HashText :value="milestone.txId" label="链上交易 ID" />
+        <span class="t-soft">这条记录当前状态对应的 Fabric 交易</span>
       </p>
 
       <BaseCard class="block">
@@ -233,6 +243,14 @@ async function decide(decision) {
   gap: var(--sp-3);
   flex-wrap: wrap;
   margin-top: calc(var(--sp-5) * -1);
+  margin-bottom: var(--sp-5);
+}
+
+.tx-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
   margin-bottom: var(--sp-5);
 }
 

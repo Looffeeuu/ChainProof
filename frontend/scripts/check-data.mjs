@@ -38,9 +38,9 @@ function assert(cond, message) {
 const FIELDS = {
   Project: ['projectId', 'name', 'description', 'ownerId', 'members', 'createdAt', 'status'],
   Milestone: ['milestoneId', 'projectId', 'title', 'description', 'fileName', 'fileHash',
-    'contributors', 'confirmations', 'createdAt', 'status'],
+    'contributors', 'confirmations', 'createdAt', 'status', 'txId'],
   Certificate: ['certificateId', 'projectId', 'memberId', 'contributionPercentage',
-    'milestoneIds', 'issuedAt', 'verificationStatus']
+    'milestoneIds', 'issuedAt', 'verificationStatus', 'txId']
 }
 
 function sameFields(obj, expected, where) {
@@ -76,6 +76,23 @@ await check('枚举取值都在 spec/02 §2.3 的清单里', () => {
       assert(D.includes(c.decision), `${m.milestoneId} 的 decision=${c.decision} 不在清单里`))
   })
   projects.forEach((p) => assert(p.status === 'ACTIVE', `${p.projectId} 的 status 不是 ACTIVE`))
+})
+
+// 证书用 VALID，里程碑用 VERIFIED。这两个词同形不同义，是最容易写混的一处：
+// 前端一度按 VERIFIED 判断证书是否有效，而 C 线定的是 VALID（spec/03 §9）
+await check('证书的 verificationStatus 是 VALID，不是 VERIFIED', () => {
+  certificates.forEach((c) =>
+    assert(c.verificationStatus === 'VALID',
+      `${c.certificateId} 的 verificationStatus=${c.verificationStatus}`))
+})
+
+await check('txId 都是 64 位十六进制，且与 fileHash 不是同一个值', () => {
+  milestones.forEach((m) => {
+    assert(/^[0-9a-f]{64}$/.test(m.txId), `${m.milestoneId} 的 txId 格式不对`)
+    assert(m.txId !== m.fileHash, `${m.milestoneId} 的 txId 和 fileHash 一样，多半是复制错了`)
+  })
+  certificates.forEach((c) =>
+    assert(/^[0-9a-f]{64}$/.test(c.txId), `${c.certificateId} 的 txId 格式不对`))
 })
 
 await check('每条里程碑的贡献比例都是整数且总和为 100', () => {
@@ -183,6 +200,86 @@ await check('比例总和不是 100 时提交被拒，且错误信息说清当�
 await check('验证不存在的证书返回 NOT_FOUND 而不是抛错', async () => {
   const r = await api.verifyCertificate('CERT-NOPE')
   assert(r.verificationStatus === 'NOT_FOUND', `返回了 ${r.verificationStatus}`)
+})
+
+await check('验证存在的证书返回 VALID，并带上 txId', async () => {
+  const r = await api.verifyCertificate('CERT-P001-ALICE')
+  assert(r.verificationStatus === 'VALID', `返回了 ${r.verificationStatus}`)
+  assert(/^[0-9a-f]{64}$/.test(r.txId), '没带 txId，验证页就没有链上依据可显示')
+  return `${r.verificationStatus} · ${r.txId.slice(0, 16)}…`
+})
+
+// C 线规则（spec/03 §6）：带了 X-Member-Id 只返回这个人参与的项目，
+// 不带返回全部。假接口必须同口径，否则切真接口那天行为会突变
+await check('项目列表按成员过滤，不传成员时返回全部', async () => {
+  const all = await api.listProjects()
+  const bobs = await api.listProjects('bob')
+  assert(all.length === projects.length, `不传成员时返回了 ${all.length} 个`)
+  assert(bobs.every((p) => p.members.includes('bob')), '返回了 bob 没参与的项目')
+  assert(bobs.length < all.length, 'bob 看到的项目数应当少于全部（P003 里没有 bob）')
+  return `全部 ${all.length} 个，bob 能看到 ${bobs.length} 个`
+})
+
+// —— 证书签发（spec/03 §8）——
+await check('签发证书要求成员属于该项目', async () => {
+  try {
+    await api.createCertificate('P003', { memberId: 'bob' })   // P003 只有 alice 和 charlie
+    throw new Error('本该被拒绝')
+  } catch (e) {
+    assert(e.code === 'MEMBER_NOT_IN_CLAIM', `code 是 ${e.code}`)
+    return `${e.code} / ${e.message}`
+  }
+})
+
+await check('没有已验证里程碑时不能签发证书', async () => {
+  try {
+    await api.createCertificate('P003', { memberId: 'charlie' })  // P003 一条里程碑都没有
+    throw new Error('本该被拒绝')
+  } catch (e) {
+    assert(e.code === 'NO_VERIFIED_MILESTONE', `code 是 ${e.code}`)
+    return `${e.code} / ${e.message}`
+  }
+})
+
+await check('签发证书是幂等的：重复请求返回同一张，不新签', async () => {
+  const first = await api.createCertificate('P001', { memberId: 'bob' })
+  sameFields(first, FIELDS.Certificate, '新签的证书')
+  assert(first.verificationStatus === 'VALID', `verificationStatus 是 ${first.verificationStatus}`)
+
+  const again = await api.createCertificate('P001', { memberId: 'bob' })
+  assert(again.certificateId === first.certificateId,
+    `第二次拿到的是 ${again.certificateId}，与第一次 ${first.certificateId} 不同`)
+
+  const list = await api.listCertificates({ projectId: 'P001', memberId: 'bob' })
+  assert(list.length === 1, `P001 里 bob 有 ${list.length} 张证书，应当只有 1 张`)
+  return first.certificateId
+})
+
+await check('证书列表的两个筛选参数都生效，也都可以不传', async () => {
+  const all = await api.listCertificates()
+  const byProject = await api.listCertificates({ projectId: 'P001' })
+  const byMember = await api.listCertificates({ memberId: 'alice' })
+  assert(byProject.every((c) => c.projectId === 'P001'), 'projectId 筛选没生效')
+  assert(byMember.every((c) => c.memberId === 'alice'), 'memberId 筛选没生效')
+  assert(all.length >= byProject.length && all.length >= byMember.length, '不传参数应当返回最多')
+  return `全部 ${all.length} · P001 ${byProject.length} · alice ${byMember.length}`
+})
+
+await check('确认导致状态变化后，txId 会换成新的那笔交易', async () => {
+  const before = await api.getMilestone('M001')      // 已经是 VERIFIED，拿它的 txId 当基线
+  assert(/^[0-9a-f]{64}$/.test(before.txId), 'M001 没有 txId')
+
+  const target = await api.createMilestone('P001', {
+    title: '自检用·txId 更新', description: '', fileName: 'x.zip', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 100 }]
+  })
+  const created = target.txId
+  const after = await api.confirmMilestone(target.milestoneId, {
+    memberId: 'alice', decision: 'CONFIRMED'
+  })
+  assert(after.status === 'VERIFIED', `确认后状态是 ${after.status}`)
+  assert(after.txId !== created, 'txId 没变——它应当指向最近一次让状态改变的交易')
+  return `${created.slice(0, 12)}… → ${after.txId.slice(0, 12)}…`
 })
 
 // —— useAsync 的三态 ——

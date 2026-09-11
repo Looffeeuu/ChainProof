@@ -8,6 +8,7 @@ import StatusBadge from '../components/base/StatusBadge.vue'
 import ErrorNotice from '../components/base/ErrorNotice.vue'
 import FormField from '../components/base/FormField.vue'
 import BaseSpinner from '../components/base/BaseSpinner.vue'
+import HashText from '../components/base/HashText.vue'
 import { useAsync } from '../composables/useAsync.js'
 import { verifyCertificate } from '../api/certificates.js'
 import { formatDate } from '../utils/format-time.js'
@@ -42,17 +43,20 @@ function submit() {
 /**
  * 核对结果分三种，用白名单判断而不是「不等于 NOT_FOUND 就算通过」。
  *
- * 原来写的是 `verificationStatus !== 'NOT_FOUND'`，这会把将来可能出现的
- * REJECTED、REVOKED 之类的值也算成「一致」——页面会一边说「与存证记录一致」，
- * 一边挂一个「已拒绝」的徽章。spec/02 §2.3 定的规矩是
- * 「收到列表外的值不要静默吞掉」，这里照办：只有 VERIFIED 才说一致，
- * 其余照实说「查到了，但状态不是已验证」。
+ * 曾经写的是 `verificationStatus !== 'NOT_FOUND'`，那会把任何没见过的取值
+ * 都算成「一致」——页面一边说「与存证记录一致」，一边挂一个别的徽章。
+ * spec/02 §2.3 的规矩是「收到列表外的值不要静默吞掉」，这里照办。
+ *
+ * **取值是 `VALID` 不是 `VERIFIED`**（spec/03 §9，C 线定的）。
+ * `VERIFIED` 是 Milestone.status 的取值，两者同形不同义，容易写混。
+ * 这里把 `VERIFIED` 也一并接受：万一后端某处沿用了里程碑那套词，
+ * 页面不至于把一张有效证书说成「状态不对」。
  */
 const verdict = computed(() => {
   const status = result.value?.verificationStatus
   if (!status) return ''
   if (status === 'NOT_FOUND') return 'missing'
-  if (status === 'VERIFIED') return 'verified'
+  if (status === 'VALID' || status === 'VERIFIED') return 'verified'
   return 'other'
 })
 </script>
@@ -149,6 +153,12 @@ const verdict = computed(() => {
           <dt class="t-label">签发时间</dt>
           <dd class="t-nums">{{ formatDate(result.issuedAt) }}</dd>
         </div>
+        <!-- 这一页要回答的就是「凭什么信」。没有交易 ID，
+             上面那句「与存证记录一致」就只是本站的一面之词（spec/03 §5） -->
+        <div v-if="result.txId" class="wide">
+          <dt class="t-label">链上交易</dt>
+          <dd><HashText :value="result.txId" :keep="16" label="链上交易 ID" /></dd>
+        </div>
       </dl>
 
       <BaseButton variant="secondary" @click="router.push(`/certificates/${result.certificateId}`)">
@@ -193,6 +203,7 @@ const verdict = computed(() => {
 .facts dt { margin-bottom: var(--sp-1); }
 .facts dd { margin: 0; min-width: 0; word-break: break-all; }
 .big { font-size: 20px; font-weight: 600; }
+.wide { grid-column: 1 / -1; }
 
 @media (max-width: 900px) {
   .facts { grid-template-columns: 1fr; }

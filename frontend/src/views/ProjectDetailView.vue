@@ -1,6 +1,6 @@
 <script setup>
-import { computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '../components/base/PageHeader.vue'
 import BaseCard from '../components/base/BaseCard.vue'
 import BaseButton from '../components/base/BaseButton.vue'
@@ -11,10 +11,13 @@ import MemberAvatars from '../components/project/MemberAvatars.vue'
 import ContributionPanel from '../components/project/ContributionPanel.vue'
 import ContributionBreakdown from '../components/project/ContributionBreakdown.vue'
 import MilestoneTimeline from '../components/milestone/MilestoneTimeline.vue'
+import ErrorNotice from '../components/base/ErrorNotice.vue'
 import { useAsync } from '../composables/useAsync.js'
 import { getProject, getContributions } from '../api/projects.js'
 import { listMilestones } from '../api/milestones.js'
+import { listCertificates, createCertificate } from '../api/certificates.js'
 import { formatDate } from '../utils/format-time.js'
+import { session } from '../stores/session.js'
 
 /**
  * 项目详情。版式照 界面预览.html 的「项目详情」屏：
@@ -23,15 +26,17 @@ import { formatDate } from '../utils/format-time.js'
  * spec/01 §2.7 原本写的是「三个 tab」。这里改成一屏纵向排列，理由见笔记 §2.1。
  */
 const route = useRoute()
+const router = useRouter()
 
 async function load(projectId) {
-  // 三个接口互不依赖，并发发出。串行的话页面要多等两个来回
-  const [project, milestones, contributions] = await Promise.all([
+  // 四个接口互不依赖，并发发出。串行的话页面要多等三个来回
+  const [project, milestones, contributions, certificates] = await Promise.all([
     getProject(projectId),
     listMilestones(projectId),
-    getContributions(projectId)
+    getContributions(projectId),
+    listCertificates({ projectId })
   ])
-  return { project, milestones, contributions }
+  return { project, milestones, contributions, certificates }
 }
 
 const { data, loading, error, run } = useAsync(load)
@@ -43,6 +48,54 @@ watch(() => route.params.id, (id) => id && run(id), { immediate: true })
 const project = computed(() => data.value?.project)
 const milestones = computed(() => data.value?.milestones ?? [])
 const newMilestonePath = computed(() => `/projects/${route.params.id}/milestones/new`)
+
+/* ——— 贡献证明（FE-16）———
+ *
+ * 签发条件由 C 线定死（spec/03 §8.2）：这个人得是项目成员，
+ * 项目里得至少有一条已验证的里程碑。按钮什么时候能点，照这两条判断，
+ * 而不是让人点了再被接口拒绝。
+ *
+ * 接口是**幂等**的（§8.3）：同一个人重复请求会拿回已有的那张，不会签出第二张。
+ * 所以这里不需要「先查有没有再决定调不调」，已经有证书时直接给个查看入口就行。
+ */
+const me = computed(() => session.currentMemberId)
+
+const myCertificate = computed(() =>
+  (data.value?.certificates ?? []).find((c) => c.memberId === me.value)
+)
+
+const verifiedCount = computed(
+  () => milestones.value.filter((m) => m.status === 'VERIFIED').length
+)
+
+const isMember = computed(() => project.value?.members.includes(me.value) ?? false)
+
+const canIssue = computed(() => isMember.value && verifiedCount.value > 0)
+
+/** 不能签发时的原因。按钮不出现，就要说清为什么不出现 */
+const issueBlockedReason = computed(() => {
+  if (!isMember.value) return `${me.value} 不是这个项目的成员，不能在这里签发贡献证明。`
+  if (verifiedCount.value === 0) {
+    return '这个项目还没有任何一条里程碑通过全员确认。至少有一条之后，才能签发贡献证明。'
+  }
+  return ''
+})
+
+const issuing = ref(false)
+const issueError = ref(null)
+
+async function issueCertificate() {
+  issuing.value = true
+  issueError.value = null
+  try {
+    const cert = await createCertificate(route.params.id, { memberId: me.value })
+    router.push(`/certificates/${cert.certificateId}`)
+  } catch (e) {
+    issueError.value = e
+  } finally {
+    issuing.value = false
+  }
+}
 </script>
 
 <template>
@@ -116,6 +169,34 @@ const newMilestonePath = computed(() => `/projects/${route.params.id}/milestones
               上方的累计占比是把这几个数按比例缩放到总和 100 的结果。
             </p>
           </details>
+
+          <!-- 贡献证明的入口。这是整条演示链路的最后一环：
+               创建项目 → 提交里程碑 → 全员确认 → **签发证明** → 公开验证。
+               入口放在累计比例这张卡片里，因为证书证明的就是这个数字。 -->
+          <div class="issue">
+            <ErrorNotice v-if="issueError" :error="issueError" title="没能签发这份贡献证明" />
+
+            <template v-if="myCertificate">
+              <p class="t-small t-soft">
+                {{ me }} 在这个项目里已经有一份贡献证明，可以打印，也可以让任何人公开核验。
+              </p>
+              <BaseButton @click="$router.push(`/certificates/${myCertificate.certificateId}`)">
+                查看 {{ me }} 的贡献证明
+              </BaseButton>
+            </template>
+
+            <template v-else-if="canIssue">
+              <p class="t-small t-soft">
+                依据这个项目里 {{ verifiedCount }} 条已验证的里程碑，
+                可以为 {{ me }} 签发一份贡献证明。
+              </p>
+              <BaseButton :loading="issuing" loading-text="签发中…" @click="issueCertificate">
+                为 {{ me }} 签发贡献证明
+              </BaseButton>
+            </template>
+
+            <p v-else class="t-small t-soft">{{ issueBlockedReason }}</p>
+          </div>
         </BaseCard>
 
         <BaseCard class="col">
@@ -179,6 +260,16 @@ const newMilestonePath = computed(() => `/projects/${route.params.id}/milestones
 .detail summary { cursor: pointer; color: var(--c-primary); font-weight: 600; }
 .table-wrap { overflow-x: auto; margin-top: var(--sp-3); }
 .foot { margin-top: var(--sp-3); max-width: 60ch; }
+
+.issue {
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: start;
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--c-border-subtle);
+}
+.issue p { max-width: 60ch; }
 
 .desc { max-width: 68ch; }
 .is-placeholder { font-style: italic; }

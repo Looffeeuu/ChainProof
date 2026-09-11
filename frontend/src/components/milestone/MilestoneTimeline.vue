@@ -48,6 +48,13 @@ const TONE = {
           <ConfirmProgress :milestone="m" />
           <RouterLink :to="`/milestones/${m.milestoneId}`" class="t-small more">查看声明</RouterLink>
         </div>
+
+        <!-- 链上交易 ID。没有它的话，「链上已验证」那个徽章在界面上没有任何依据可指，
+             整个产品最核心的主张就只是一句需要被相信的话（spec/03 §5） -->
+        <p v-if="m.txId" class="t-small t-soft tx">
+          <span class="t-label">链上交易</span>
+          <HashText :value="m.txId" :label="`${m.title} 的链上交易 ID`" />
+        </p>
       </div>
     </li>
   </ol>
@@ -117,4 +124,6 @@ const TONE = {
 }
 
 .more { color: var(--c-primary); }
+
+.tx { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 </style>
