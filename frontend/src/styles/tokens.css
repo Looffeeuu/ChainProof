@@ -1,0 +1,30 @@
+/* 设计令牌：全工程唯一允许出现颜色与间距字面量的文件。
+   来源与理由见 ../../../../spec/01-设计系统.md §2。改这里之前先改那份规范。 */
+:root {
+  /* 颜色 */
+  --c-bg: #f7f8fa;
+  --c-surface: #ffffff;
+  --c-border-subtle: #e6e8ec;
+  --c-border-strong: #7d8798;
+  --c-text: #111827;
+  --c-text-soft: #5a6473;
+  --c-primary: #2b52d8;
+  --c-primary-weak: #eef2ff;
+  --c-verified: #0a6c46;      --c-verified-bg: #e7f5ee;
+  --c-pending: #8a4b06;       --c-pending-bg: #fdf3e4;
+  --c-rejected: #b02318;      --c-rejected-bg: #fdece9;
+
+  /* 间距 */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  /* 圆角与阴影 */
+  --r-sm: 8px; --r-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06);
+  --shadow-lg: 0 12px 32px rgba(16, 24, 40, .10);
+  --ease: 160ms cubic-bezier(.2, .6, .3, 1);
+
+  /* 字体 */
+  --font-sans: Inter, ui-sans-serif, system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Noto Sans Mono", monospace;
+}

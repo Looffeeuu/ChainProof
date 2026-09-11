@@ -1,0 +1,186 @@
+/* 元素级重置与排版基线。只写「所有页面都成立」的规则，
+   业务样式一律进各自组件的 <style scoped>。
+   排版五级与间距八档的定义见 spec/01-设计系统.md §2.2、§2.3。 */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  font-size: 15px;          /* body 级：spec/01 §2.3 */
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--c-text);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 标题：只有两级，对应 §2.3 的 display 与 title。
+   h3 及以下沿用 title 的字号，靠字重和位置区分，不再新增字号档。 */
+h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+h2, h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+p, figure, blockquote { margin: 0; }
+ul, ol { margin: 0; padding-left: var(--sp-5); }
+
+a {
+  color: var(--c-primary);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+img, svg { display: block; max-width: 100%; }
+
+table { border-collapse: collapse; width: 100%; }
+
+/* 键盘焦点：只在键盘导航时出现，鼠标点击不显示。
+   用 outline 而不是 box-shadow，圆角元素上也不会被裁掉。 */
+:focus-visible {
+  outline: 2px solid var(--c-primary);
+  outline-offset: 2px;
+}
+
+/* 只能被脚本聚焦的容器（换页后接住焦点的 <main>）不画焦点框——
+   用户并没有「选中」它，画个框反而像是出了什么事。
+   它本身也不进 Tab 顺序，所以键盘导航不受影响。 */
+[tabindex='-1']:focus { outline: none; }
+
+/* 跳到主要内容：平时移出屏幕外，被 Tab 聚焦时才滑进来。
+   不用 display:none —— 那样它就不在 Tab 顺序里了，等于没有。 */
+.skip-link {
+  position: absolute;
+  left: var(--sp-2);
+  top: calc(var(--sp-8) * -1);
+  z-index: 10;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-sm);
+  background: var(--c-primary);
+  color: var(--c-surface);
+  font-weight: 600;
+  transition: top var(--ease);
+}
+.skip-link:focus { top: var(--sp-2); text-decoration: none; }
+
+/* 排版辅助类：跨组件复用，所以放全局。
+   scoped 样式里写不了这些——它们要出现在十几个组件里，
+   每个组件抄一份就会出现十几种字号。 */
+.t-small { font-size: 13px; }
+
+.t-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-text-soft);
+}
+
+.t-soft { color: var(--c-text-soft); }
+
+/* 数字与哈希强制等宽 + 斜杠零，理由见 spec/01 §2.3 */
+.t-nums { font-variant-numeric: tabular-nums slashed-zero; }
+
+.t-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+/* 仅供屏幕阅读器：视觉上隐藏但仍进无障碍树 */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* 用户在系统里开了「减少动态效果」时，关掉所有装饰性动效。
+   带 data-motion="essential" 的例外：加载动画一旦停下就变成一个静止的圆环，
+   看起来像卡死，那不是「更安静」而是「更难懂」。 */
+@media (prefers-reduced-motion: reduce) {
+  *:not([data-motion='essential']), *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 表单控件基线。边框用 --c-border-strong：WCAG SC 1.4.11 要求
+   「识别控件所必需」的部分达到 3:1，输入框的边框看不清，用户就找不到能输入的地方
+   （理由见 spec/01 §2.1）。 */
+input[type='text'],
+input[type='number'],
+input[type='search'],
+textarea,
+select {
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--c-border-strong);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  transition: border-color var(--ease);
+}
+
+input:hover:not(:disabled),
+textarea:hover:not(:disabled),
+select:hover:not(:disabled) { border-color: var(--c-text-soft); }
+
+input:disabled, textarea:disabled, select:disabled {
+  background: var(--c-bg);
+  color: var(--c-text-soft);
+  cursor: not-allowed;
+}
+
+/* 校验没过的控件：边框变红，同时靠 FormField 给出文字说明。
+   只变颜色不给文字是不够的——WCAG SC 1.4.1 */
+input[aria-invalid='true'],
+textarea[aria-invalid='true'],
+select[aria-invalid='true'] { border-color: var(--c-rejected); }
+
+textarea { resize: vertical; min-height: 96px; line-height: 1.5; }
+
+/* 数字输入框去掉上下箭头：比例分配器里箭头会被误点，
+   而且它一次只加 1，对填百分比没什么用 */
+input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* 打印：证书页要能直接 Ctrl+P 交出去（spec/01 §2.7）。
+   带 data-print="hide" 的东西不进纸——侧栏、按钮、面包屑这些在纸上没有意义，
+   而且会占掉本该留给内容的版面。 */
+@media print {
+  [data-print='hide'] { display: none !important; }
+
+  /* 纸是白的，页面底色印出来是一层灰。换成卡片那一档的白，边框留着。
+     这里也不能直接写白色的十六进制值——令牌之外不许出现字面量颜色（spec/01 §2.5），
+     而那条检查是纯文本 grep，写在注释里同样会被抓到 */
+  body { background: var(--c-surface); }
+
+  /* 链接在纸上点不了，把地址跟在后面印出来，读者才能自己访问 */
+  a[href^='http']::after { content: ' (' attr(href) ')'; font-size: 12px; }
+
+  /* 卡片跨页断开会很难看，能不断就不断 */
+  .avoid-break { break-inside: avoid; }
+}
