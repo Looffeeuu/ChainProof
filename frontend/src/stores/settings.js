@@ -1,23 +1,14 @@
 import { reactive, computed, watch } from 'vue'
 
 /**
- * 界面设置。全部在前端，不经过任何接口。
+ * 界面设置：视角（user / dev）与主题（system / light / dark）。全在前端。
  *
- * 两样：
- * - **视角** `mode`：`user` / `dev`。开发视角多出组件预览入口。
- * - **主题** `theme`：`system` / `light` / `dark`。
+ * **`theme` 与 `resolvedTheme` 不能混用**：前者是用户的显式选择（可能就是
+ * 'system'），切换器 UI 绑它；后者是实际生效的亮或暗，按主题分支的逻辑用它。
+ * 混了就会出现「选了跟随系统，高亮却在暗色上」。
  *
- * 主题这里要分清两个概念，混用会导致「选了跟随系统，但切换器高亮在暗色上」：
- *
- * - `theme` 是**用户的显式选择**，可能就是 `'system'`。切换器 UI 绑这个。
- * - `resolvedTheme` 是**实际生效的是亮还是暗**。需要按主题分支的逻辑用这个。
- *
- * 存在 localStorage 里，刷新不丢。读写都包 try/catch——
- * 隐私窗口、禁用了站点数据的浏览器里，localStorage 的存取本身会抛错，
- * 那种情况下退回默认值继续用，不能让一个偏好设置把整个应用带崩。
- *
- * 首屏的主题不由这个文件负责：index.html 里有一段同步脚本，
- * 在绘制之前就把 data-theme 写好了，否则会闪一下。这里只负责之后的切换。
+ * 首屏的主题由 index.html 里那段同步脚本负责，这里只管之后的切换。
+ * localStorage 的存取包了 try/catch：隐私窗口里它本身会抛错。
  */
 const KEY = 'chainproof.settings'
 

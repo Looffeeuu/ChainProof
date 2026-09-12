@@ -42,16 +42,11 @@ function submit() {
 }
 
 /**
- * 核对结果分三种，用白名单判断而不是「不等于 NOT_FOUND 就算通过」。
+ * 用白名单判断，不用「不等于 NOT_FOUND 就算通过」——后者会把任何没见过的
+ * 取值都算成「一致」，页面就会一边说一致一边挂个别的徽章。
  *
- * 曾经写的是 `verificationStatus !== 'NOT_FOUND'`，那会把任何没见过的取值
- * 都算成「一致」——页面一边说「与存证记录一致」，一边挂一个别的徽章。
- * spec/02 §2.3 的规矩是「收到列表外的值不要静默吞掉」，这里照办。
- *
- * **取值是 `VALID` 不是 `VERIFIED`**（spec/03 §9，C 线定的）。
- * `VERIFIED` 是 Milestone.status 的取值，两者同形不同义，容易写混。
- * 这里把 `VERIFIED` 也一并接受：万一后端某处沿用了里程碑那套词，
- * 页面不至于把一张有效证书说成「状态不对」。
+ * **证书的取值是 `VALID` 不是 `VERIFIED`**（后者是 Milestone.status 的）。
+ * 两者同形不同义，这里把 `VERIFIED` 也一并接受，防后端某处沿用了那套词。
  */
 const verdict = computed(() => {
   const status = result.value?.verificationStatus

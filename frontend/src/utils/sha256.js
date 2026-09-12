@@ -1,22 +1,14 @@
 /**
- * SHA-256。纯函数模块，不 import 本项目任何模块（spec/02 §1.2 规则 4）。
+ * SHA-256（FIPS 180-4）。纯函数模块，不 import 本项目任何模块。
  *
- * 为什么要自己写一份，而不是只用浏览器自带的 `crypto.subtle`：
+ * **为什么不只用 `crypto.subtle`**：它只在安全上下文里存在。
+ * 在 `http://192.168.x.x` 这种地址下 `window.crypto` 还在，
+ * 但 `crypto.subtle` 是 undefined，直接用会抛 TypeError。
+ * 本项目要求 http / https / localhost 都能跑，所以有它就用，没有就用下面这份。
  *
- *   `crypto.subtle` 只在**安全上下文**（secure context）里存在——
- *   也就是 https 或 localhost。在 `http://192.168.x.x` 这种局域网地址下，
- *   `window.crypto` 还在，但 `crypto.subtle` 是 undefined，直接用会抛 TypeError。
- *
- * 本项目要求在 http / https / localhost 三种情况下都能跑，所以这里给两条路径：
- *
- *   - 有 `crypto.subtle`（https / localhost）→ 用它，原生实现快得多；
- *   - 没有（http）           → 用下面这份纯 JavaScript 实现兜底。
- *
- * 两条路径对同一份输入必须给出同样的结果，这一点由 scripts/check-data.mjs
- * 拿 FIPS 180-4 的标准测试向量 + 与 Node 内置实现逐一比对来保证。
- *
- * 算法本身是 FIPS 180-4 定义的 SHA-256，实现成可以分块喂数据的形式（update/digest），
- * 这样大文件可以一片一片读进来，内存占用不随文件大小增长。
+ * 两条路径的结果必须一致，由 check-data.mjs 拿 FIPS 标准向量
+ * 与 Node 内置实现逐一比对保证。写成 update/digest 的形式，
+ * 大文件可以分块喂，内存不随文件大小增长。
  */
 
 /** 前 64 个素数立方根小数部分的前 32 位，FIPS 180-4 §4.2.2 的常量表 */
