@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '../components/base/PageHeader.vue'
 import BaseCard from '../components/base/BaseCard.vue'
+import FlashNotice from '../components/base/FlashNotice.vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import StatusBadge from '../components/base/StatusBadge.vue'
 import EmptyState from '../components/base/EmptyState.vue'
@@ -18,10 +19,11 @@ import { listMilestones } from '../api/milestones.js'
 import { listCertificates, createCertificate } from '../api/certificates.js'
 import { formatDate } from '../utils/format-time.js'
 import { session } from '../stores/session.js'
+import { markVisited } from '../stores/recent.js'
+import { confirmGate } from '../utils/confirm-gate.js'
 
 /**
- * 项目详情。版式照 界面预览.html 的「项目详情」屏：
- * 概览 + 累计贡献比例 + 里程碑 Timeline。
+ * 项目详情：概览 + 累计贡献比例 + 存证概况 + 里程碑时间线。
  *
  * spec/01 §2.7 原本写的是「三个 tab」。这里改成一屏纵向排列，理由见笔记 §2.1。
  */
@@ -46,6 +48,11 @@ const { data, loading, error, run } = useAsync(load)
 watch(() => route.params.id, (id) => id && run(id), { immediate: true })
 
 const project = computed(() => data.value?.project)
+
+// 记一次访问，侧栏的「最近项目」按它排序（stores/recent.js）。
+// 放在取数成功之后而不是路由变化时：链接里的 ID 可能是错的，
+// 把一个 404 记进「最近访问」只会让侧栏多一条点不开的项
+watch(project, (p) => p && markVisited(p.projectId))
 const milestones = computed(() => data.value?.milestones ?? [])
 const newMilestonePath = computed(() => `/projects/${route.params.id}/milestones/new`)
 
@@ -70,11 +77,32 @@ const verifiedCount = computed(
 
 const isMember = computed(() => project.value?.members.includes(me.value) ?? false)
 
+/** 右列的存证概况。前四行都显示，包括为 0 的那些——
+ *  「已拒绝 0」是有用的信息，把它藏起来只会让人怀疑是不是漏算了。
+ *
+ *  最后一行是视角化的：「有几条在等我」。它和上面四行不是一类
+ *  （那四行是这个项目的客观状态，这一行是当前身份的待办），
+ *  所以只在真有待办时出现，没有就不占一行。 */
+const tally = computed(() => {
+  const by = (status) => milestones.value.filter((m) => m.status === status).length
+  const waitingOnMe = milestones.value.filter((m) => confirmGate(m, me.value).can).length
+
+  return [
+    { key: 'all', label: '里程碑总数', count: milestones.value.length, tone: 'rest' },
+    { key: 'verified', label: '链上已验证', count: by('VERIFIED'), tone: 'verified' },
+    { key: 'pending', label: '待确认', count: by('PENDING_CONFIRMATION'), tone: 'pending' },
+    { key: 'rejected', label: '已拒绝', count: by('REJECTED'), tone: 'rejected' },
+    ...(waitingOnMe > 0
+      ? [{ key: 'mine', label: '等你确认', count: waitingOnMe, tone: 'mine' }]
+      : [])
+  ]
+})
+
 const canIssue = computed(() => isMember.value && verifiedCount.value > 0)
 
 /** 不能签发时的原因。按钮不出现，就要说清为什么不出现 */
 const issueBlockedReason = computed(() => {
-  if (!isMember.value) return `${me.value} 不是这个项目的成员，不能在这里签发贡献证明。`
+  if (!isMember.value) return '你不是这个项目的成员，不能在这里签发贡献证明。'
   if (verifiedCount.value === 0) {
     return '这个项目还没有任何一条里程碑通过全员确认。至少有一条之后，才能签发贡献证明。'
   }
@@ -100,12 +128,6 @@ async function issueCertificate() {
 
 <template>
   <div>
-    <nav class="crumbs t-small t-soft" aria-label="面包屑">
-      <RouterLink to="/projects">项目</RouterLink>
-      <span aria-hidden="true">/</span>
-      <span>{{ project?.name ?? route.params.id }}</span>
-    </nav>
-
     <AsyncSection
       :loading="loading"
       :error="error"
@@ -117,7 +139,7 @@ async function issueCertificate() {
       <!-- data 为空且没报错，正常流程走不到；留着是为了不出现读 project.name 的白屏 -->
       <template #empty>
         <BaseCard>
-          <EmptyState title="没有这个项目的数据" description="链接里的项目 ID 可能已经失效。">
+          <EmptyState icon="search" title="没有这个项目的数据" description="链接里的项目 ID 可能已经失效。">
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects')">
                 回到项目列表
@@ -127,7 +149,30 @@ async function issueCertificate() {
         </BaseCard>
       </template>
 
-      <PageHeader :title="project.name">
+      <PageHeader :title="project.name" :description="project.description || ''">
+        <!-- 面包屑走 PageHeader 的插槽，占的是眉标的位置。
+             原先它单独写在 AsyncSection 外面，于是加载中和出错时页面顶上
+             也挂着一条「项目 / undefined」 -->
+        <template #breadcrumb>
+          <nav class="crumbs t-small t-soft" aria-label="面包屑">
+            <RouterLink to="/projects">项目</RouterLink>
+            <span aria-hidden="true">/</span>
+            <span>{{ project.name }}</span>
+          </nav>
+        </template>
+
+        <!-- 元信息原先是页头下面一个用负 margin 往上拽的独立段落。
+             负 margin 的值和 PageHeader 内部的间距耦合，那边一改这里就错位 -->
+        <template #meta>
+          <StatusBadge :status="project.status" />
+          <span class="t-nums">创建于 {{ formatDate(project.createdAt) }}</span>
+          <span aria-hidden="true">·</span>
+          <span>负责人 {{ project.ownerId }}</span>
+          <span aria-hidden="true">·</span>
+          <MemberAvatars :members="project.members" :size="20" />
+          <span class="t-nums">{{ project.members.length }} 名成员</span>
+        </template>
+
         <template #actions>
           <!-- 没有里程碑时，下面的空状态里也有一个「提交里程碑」主按钮。
                这里降级，避免同屏两个蓝按钮（spec/01 §3.2） -->
@@ -140,11 +185,7 @@ async function issueCertificate() {
         </template>
       </PageHeader>
 
-      <p class="t-small t-soft meta-line">
-        创建于 {{ formatDate(project.createdAt) }} · 负责人 {{ project.ownerId }} ·
-        {{ project.members.length }} 名成员
-        <StatusBadge :status="project.status" class="meta-badge" />
-      </p>
+      <FlashNotice />
 
       <div class="columns">
         <BaseCard class="col">
@@ -157,16 +198,14 @@ async function issueCertificate() {
           <!-- <details> 是原生的折叠块：不用写任何 JavaScript，
                键盘和读屏都直接支持，展开状态还能被浏览器的页内查找唤起 -->
           <details v-if="data.contributions.members.length" class="detail">
-            <summary class="t-small">这个比例是怎么算出来的</summary>
+            <summary class="t-small">按里程碑查看</summary>
             <div class="table-wrap">
               <ContributionBreakdown
                 :milestones="milestones"
                 :members="data.contributions.members"
               />
             </div>
-            <p class="t-small t-soft foot">
-              「各条相加」是直接求和，不是百分比；上方的占比是它缩放到 100 的结果。
-            </p>
+
           </details>
 
           <!-- 贡献证明的入口。这是整条演示链路的最后一环：
@@ -176,21 +215,16 @@ async function issueCertificate() {
             <ErrorNotice v-if="issueError" :error="issueError" title="没能签发这份贡献证明" />
 
             <template v-if="myCertificate">
-              <p class="t-small t-soft">
-                {{ me }} 在这个项目里已经有一份贡献证明，可以打印，也可以让任何人公开核验。
-              </p>
+              <p class="t-small t-soft">你在这个项目的贡献证明已签发。</p>
               <BaseButton @click="$router.push(`/certificates/${myCertificate.certificateId}`)">
-                查看 {{ me }} 的贡献证明
+                查看证书
               </BaseButton>
             </template>
 
             <template v-else-if="canIssue">
-              <p class="t-small t-soft">
-                依据这个项目里 {{ verifiedCount }} 条已验证的里程碑，
-                可以为 {{ me }} 签发一份贡献证明。
-              </p>
+              <p class="t-small t-soft t-nums">已有 {{ verifiedCount }} 条里程碑通过全员确认。</p>
               <BaseButton :loading="issuing" loading-text="签发中…" @click="issueCertificate">
-                为 {{ me }} 签发贡献证明
+                签发我的贡献证明
               </BaseButton>
             </template>
 
@@ -198,14 +232,21 @@ async function issueCertificate() {
           </div>
         </BaseCard>
 
-        <BaseCard class="col">
-          <template #title><h2>项目描述</h2></template>
-          <p v-if="project.description" class="desc">{{ project.description }}</p>
-          <p v-else class="t-soft desc is-placeholder">这个项目还没有填写描述。</p>
-          <div class="members">
-            <MemberAvatars :members="project.members" />
-            <span class="t-small t-soft">{{ project.members.join(' · ') }}</span>
-          </div>
+        <!-- 右列原先放的是「项目描述」。描述通常只有两三行，而左边那张卡很高，
+             两列等高的网格把它拉成一个四百多像素的空盒子——整页最刺眼的一块空白。
+             描述现在进了页头导语，这里换成按状态分组的里程碑计数：
+             内容是随项目变化的，高度也和左列相称。 -->
+        <BaseCard class="col side">
+          <template #title><h2>存证概况</h2></template>
+
+          <ul class="tally">
+            <li v-for="row in tally" :key="row.key" class="tally-row">
+              <span class="tally-dot" :class="`tone--${row.tone}`" aria-hidden="true" />
+              <span class="tally-label">{{ row.label }}</span>
+              <span class="tally-value t-nums">{{ row.count }}</span>
+            </li>
+          </ul>
+
         </BaseCard>
       </div>
 
@@ -217,6 +258,7 @@ async function issueCertificate() {
 
         <EmptyState
           v-if="milestones.length === 0"
+          icon="chain"
           title="这个项目还没有里程碑"
           description="提交成果后会出现在这条时间线上。"
         >
@@ -234,26 +276,46 @@ async function issueCertificate() {
 </template>
 
 <style scoped>
-.crumbs { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-3); }
-
-.meta-line {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-  margin-top: calc(var(--sp-5) * -1);
-  margin-bottom: var(--sp-5);
-}
-.meta-badge { margin-left: var(--sp-1); }
+.crumbs { display: flex; gap: var(--sp-2); }
 
 .columns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 不是 1fr 1fr。左列装着贡献比例、算法说明与签发入口，内容多；
+     右列是一份短清单。等宽等高的话右列必然空一大半 */
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  /* start 而不是默认的 stretch：右列多高就多高，不跟着左列拉伸 */
+  align-items: start;
   gap: var(--sp-4);
   margin-bottom: var(--sp-5);
 }
 
 .col { display: flex; flex-direction: column; }
+
+/* —— 右列：存证概况 —— */
+.tally { list-style: none; margin: 0; padding: 0; display: grid; }
+
+.tally-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--c-border-subtle);
+}
+.tally-row:last-child { border-bottom: none; }
+
+.tally-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+.tally-dot.tone--verified { background: var(--c-verified); }
+.tally-dot.tone--pending { background: var(--c-pending); }
+.tally-dot.tone--rejected { background: var(--c-rejected); }
+.tally-dot.tone--rest { background: var(--c-border-strong); }
+.tally-dot.tone--mine { background: var(--c-primary); }
+/* 待办那一行整行用主色，和上面四行的「客观状态」区分开 */
+.tally-row:has(.tone--mine) { color: var(--c-primary-text); font-weight: 600; }
+
+.tally-label { flex: 1; font-size: var(--fs-small); }
+.tally-value { font-size: var(--fs-lead); font-weight: 640; letter-spacing: -0.01em; }
+
+.tally-note { margin-top: var(--sp-3); line-height: 1.45; }
 
 .detail { margin-top: var(--sp-4); border-top: 1px solid var(--c-border-subtle); padding-top: var(--sp-3); }
 .detail summary { cursor: pointer; color: var(--c-primary-text); font-weight: 600; }
@@ -270,21 +332,9 @@ async function issueCertificate() {
 }
 .issue p { max-width: 60ch; }
 
-.desc { max-width: 68ch; }
-.is-placeholder { font-style: italic; }
-
-.members {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-top: auto;
-  padding-top: var(--sp-4);
-}
-
 .timeline { padding: 0 var(--sp-4) var(--sp-3); }
 
 @media (max-width: 900px) {
   .columns { grid-template-columns: 1fr; }
-  .meta-line { margin-top: calc(var(--sp-4) * -1); }
 }
 </style>

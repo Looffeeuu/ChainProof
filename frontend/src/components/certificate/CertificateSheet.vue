@@ -84,9 +84,21 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
   max-width: 720px;
   margin: 0 auto;
   padding: var(--sp-8) var(--sp-7);
-  background: var(--c-surface);
-  border: 1px solid var(--c-border-strong);
+  border: 1px solid var(--c-border-subtle);
   border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+
+  /* 顶端的一条彩带。全站只有三处允许出现渐变，这是其中之一（spec/01 §2.4）：
+     从主色过渡到存证色，正好是这张纸讲的两件事——「这是本站签发的」
+     与「它在链上有据可查」。
+
+     它是**背景的第一层**，不是绝对定位的元素。背景本来就被 border-radius 裁，
+     所以两端的圆角自动就对；而原先的做法是一个 `position: absolute` 的
+     `<span>` 加上容器的 `overflow: hidden`，那个 `overflow: hidden`
+     连带把纸上两个复制按钮的键盘焦点框一起裁掉了。 */
+  background:
+    linear-gradient(90deg, var(--c-primary), var(--c-chain)) top / 100% 5px no-repeat,
+    var(--c-surface);
 }
 
 .head { text-align: center; margin-bottom: var(--sp-7); }
@@ -98,11 +110,14 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
 
 .figure {
   text-align: center;
+  /* 排版档位之外的登记例外（spec/01 §2.3）：证书是一张纸不是应用界面，
+     这个数字是整张纸的主体，套界面的字号档会显得畏缩 */
   font-size: clamp(48px, 12vw, 88px);
-  font-weight: 600;
+  font-weight: 640;
   letter-spacing: -0.03em;
   line-height: 1.1;
   margin: var(--sp-4) 0 var(--sp-2);
+  color: var(--c-primary-text);
 }
 .unit { font-size: 0.4em; margin-left: var(--sp-1); }
 
@@ -119,9 +134,11 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
 }
 .ids li {
   padding: var(--sp-1) var(--sp-2);
-  border: 1px solid var(--c-border-subtle);
-  border-radius: var(--r-sm);
-  font-size: 13px;
+  border-radius: var(--r-xs);
+  background: var(--c-sunken);
+  box-shadow: inset 0 0 0 1px var(--c-border-subtle);
+  color: var(--c-chain);
+  font-size: var(--fs-small);
 }
 
 .meta {
@@ -153,6 +170,16 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
 
 /* 打印时去掉圆角和边框：纸本身就是边界，再画一个框是多余的 */
 @media print {
-  .sheet { border: none; border-radius: 0; padding: 0; max-width: none; }
+  .sheet {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    max-width: none;
+    box-shadow: none;
+    /* 彩带在纸上印不可靠（多数打印设置默认不打背景图形），
+       而且纸张本身就是边界，不需要再画一条。
+       这里把背景重置成单层，渐变那一层随之消失 */
+    background: var(--c-surface);
+  }
 }
 </style>

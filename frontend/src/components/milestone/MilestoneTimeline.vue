@@ -2,6 +2,7 @@
 import StatusBadge from '../base/StatusBadge.vue'
 import HashText from '../base/HashText.vue'
 import ConfirmProgress from './ConfirmProgress.vue'
+import AwaitingYou from './AwaitingYou.vue'
 import { formatDateTime } from '../../utils/format-time.js'
 
 /**
@@ -38,6 +39,7 @@ const TONE = {
         <div class="head">
           <RouterLink :to="`/milestones/${m.milestoneId}`" class="title">{{ m.title }}</RouterLink>
           <StatusBadge :status="m.status" />
+          <AwaitingYou :milestone="m" />
         </div>
 
         <p v-if="m.description" class="t-small t-soft desc">{{ m.description }}</p>
@@ -75,15 +77,21 @@ const TONE = {
 }
 
 /* 竖线：用伪元素画在圆点的中轴上，最后一项不画，
-   否则线会从最后一个点继续往下拖出一截 */
+   否则线会从最后一个点继续往下拖出一截。
+
+   颜色从中性边框色换成存证色。这条线是整个界面里唯一一个「链」的直接图形，
+   spec/01 §2.7 也把时间线列为最能体现产品主张的一屏；
+   画成和卡片分隔线同一个灰，等于把它降级成了普通的排版装饰。 */
 .item::before {
   content: '';
   position: absolute;
   left: 5px;
   top: var(--sp-5);
   bottom: 0;
-  width: 1px;
-  background: var(--c-border-subtle);
+  width: 2px;
+  border-radius: 2px;
+  background: var(--c-chain);
+  opacity: 0.35;
 }
 .item:last-child::before { display: none; }
 
@@ -91,12 +99,16 @@ const TONE = {
   position: relative;
   z-index: 1;
   flex-shrink: 0;
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   margin-top: var(--sp-2);
   border-radius: 999px;
+  /* 描边取卡片底色，让圆点在竖线上「开一个口」，看起来是串在线上而不是压在线上 */
   border: 2px solid var(--c-surface);
   background: var(--c-text-soft);
+  /* 外面再套一圈同色的淡光晕，圆点才有分量。
+     用 box-shadow 而不是加大直径：直径变了竖线的对齐位置也要跟着改 */
+  box-shadow: 0 0 0 3px var(--c-sunken);
 }
 .tone--verified .dot { background: var(--c-verified); }
 .tone--pending .dot { background: var(--c-pending); }
@@ -111,7 +123,7 @@ const TONE = {
   flex-wrap: wrap;
 }
 
-.title { font-weight: 600; color: var(--c-text); }
+.title { font-size: var(--fs-lead); font-weight: 600; color: var(--c-text); }
 .title:hover { color: var(--c-primary-text); }
 
 .desc { max-width: 72ch; }
@@ -119,11 +131,19 @@ const TONE = {
 .meta {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  gap: var(--sp-3);
   flex-wrap: wrap;
 }
 
-.more { color: var(--c-primary-text); }
+.more { color: var(--c-primary-text); font-weight: 600; }
 
-.tx { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+/* 链上交易独占一条：它和上面那行的文件哈希是两个不同的东西
+   （一个是内容的指纹，一个是这次上链的凭据），并排放会被当成同一类 */
+.tx {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.tx .t-label { margin: 0; }
 </style>

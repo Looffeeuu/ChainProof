@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import MemberAvatars from '../project/MemberAvatars.vue'
 import { largestRemainder, sumPercentages, clampPercentage } from '../../utils/percentage.js'
+import { memberTone } from '../../utils/member-tone.js'
 
 /**
  * 贡献比例分配器。规则见 spec/01 §2.6 末段与需求文档 FR-04：
@@ -16,7 +17,21 @@ import { largestRemainder, sumPercentages, clampPercentage } from '../../utils/p
  */
 const props = defineProps({
   /** [{ memberId, percentage }]，由父组件持有，这里通过 update:modelValue 回写 */
-  modelValue: { type: Array, required: true }
+  modelValue: { type: Array, required: true },
+
+  /**
+   * 父表单认为这一组值不合格。
+   *
+   * 组件自己也算得出 total !== 100，为什么还要父组件传：
+   * 「什么时候该把错误摆出来」是表单的事，不是控件的事——
+   * 用户刚打开页面时总和当然是 0，那一刻不该是红的。
+   *
+   * 它同时让容器带上 data-invalid 与 tabindex，
+   * 好让 composables/useInvalidFocus.js 能把焦点送过来：
+   * 这一组控件里没有单一的「那个出错的输入框」，
+   * 不给一个落点的话，「只有比例不对」时点提交仍然是没反应。
+   */
+  invalid: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -43,6 +58,25 @@ function setPercentage(memberId, raw) {
   )
 }
 
+/**
+ * 给读屏用的播报，**拖完再说**。
+ *
+ * 原先 aria-live 挂在可见的总和上，而拖动 range 每一帧都触发 input，
+ * 读屏会被「已分配 37%…38%…39%」淹没。这里等操作停下 500ms 再播一次结论，
+ * 可见的那一行则照常实时更新——两者的读者不同，节奏也该不同。
+ */
+const announced = ref('')
+let announceTimer = null
+
+watch(total, (value) => {
+  clearTimeout(announceTimer)
+  announceTimer = setTimeout(() => {
+    announced.value = `已分配 ${value}%，${hint.value.text}`
+  }, 500)
+})
+
+onBeforeUnmount(() => clearTimeout(announceTimer))
+
 /** 平均分配。用最大余数法，三个人会得到 34/33/33 而不是三个 33（utils/percentage.js） */
 function distributeEvenly() {
   const shares = largestRemainder(props.modelValue.map(() => 1))
@@ -66,10 +100,14 @@ function giveRemainderTo(memberId) {
 </script>
 
 <template>
-  <div class="allocator">
-    <!-- 总和是这个表单最要紧的一处反馈，它一变就要播报出去，
-         否则读屏用户完全不知道自己刚才那一拖把总数拖到了多少 -->
-    <div class="bar-head" role="status" aria-live="polite">
+  <div
+    class="allocator"
+    :data-invalid="invalid ? 'true' : undefined"
+    :tabindex="invalid ? -1 : undefined"
+  >
+    <!-- 播报走下面那个隐藏的 live 区域，不挂在这一行上：
+         这一行每一帧都在变，挂上去读屏会被逐帧的数字淹没 -->
+    <div class="bar-head">
       <span class="t-small">
         已分配 <strong class="t-nums total">{{ total }}</strong> %
       </span>
@@ -83,9 +121,12 @@ function giveRemainderTo(memberId) {
         v-for="c in modelValue"
         :key="c.memberId"
         class="seg"
+        :class="`tone--${memberTone(c.memberId)}`"
         :style="{ width: `${Math.min(100, c.percentage)}%` }"
       ></span>
     </div>
+
+    <span class="sr-only" role="status" aria-live="polite">{{ announced }}</span>
 
     <ul class="rows">
       <li v-for="c in modelValue" :key="c.memberId" class="row">
@@ -135,9 +176,13 @@ function giveRemainderTo(memberId) {
 
 <style scoped>
 .allocator { display: grid; gap: var(--sp-3); }
+/* 它只在校验没过时才可聚焦，而且是被脚本送过来的，不是用户自己 Tab 到的。
+   所以不画焦点框——用户并没有「选中」这一整块，画个框反而像是出了什么事。
+   真正说明问题的是下面「还差 N%」那行字，它本来就是红的 */
+.allocator[tabindex]:focus { outline: none; }
 
 .bar-head { display: flex; align-items: center; gap: var(--sp-3); }
-.total { font-size: 20px; }
+.total { font-size: var(--fs-heading); font-weight: 640; letter-spacing: -0.012em; }
 
 .chip {
   padding: var(--sp-1) var(--sp-2);
@@ -160,16 +205,26 @@ function giveRemainderTo(memberId) {
 
 .bar {
   display: flex;
-  height: var(--sp-2);
-  border-radius: var(--r-sm);
+  height: 10px;
+  border-radius: 999px;
   overflow: hidden;
-  background: var(--c-bg);
+  background: var(--c-sunken);
+  box-shadow: inset 0 0 0 1px var(--c-border-subtle);
 }
-.seg { height: 100%; }
-.seg:nth-child(4n + 1) { background: var(--c-primary); }
-.seg:nth-child(4n + 2) { background: var(--c-verified); }
-.seg:nth-child(4n + 3) { background: var(--c-pending); }
-.seg:nth-child(4n + 4) { background: var(--c-rejected); }
+/* 分段用**人物色**，不是状态色。
+   原先是按 nth-child 取 --c-primary / --c-verified / --c-pending / --c-rejected，
+   于是同一个界面里绿色既是「链上已验证」又是「第二位成员」，
+   红色段会让人把某位成员读成「被拒绝」；而且按下标取色，
+   同一个 bob 在这里是绿的、在项目详情的比例条里是品红——
+   「同一个人在任何位置都是同一个颜色」正是 utils/member-tone.js 存在的全部理由。 */
+/* flex-shrink: 0 是必须的。不写的话 flex 会把超过 100% 的部分按比例压回容器宽度，
+   三个人各 60% 画出来仍然是一条不多不少刚好填满的横条——
+   「装不下」这个提示从来不会出现。写了它才真的溢出、被 .bar 的 overflow 裁掉 */
+.seg { height: 100%; flex-shrink: 0; }
+.tone--1 { background: var(--c-member-1); }
+.tone--2 { background: var(--c-member-2); }
+.tone--3 { background: var(--c-member-3); }
+.tone--4 { background: var(--c-member-4); }
 
 .rows { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
 

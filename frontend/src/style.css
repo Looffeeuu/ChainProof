@@ -1,5 +1,6 @@
-/* 全局样式入口，只做一件事：按顺序引入令牌与基线。
+/* 全局样式入口，只做一件事：按顺序引入字体、令牌与基线。
    业务样式一律写在各组件的 <style scoped> 里，不再往这里堆。
    @import 必须排在所有规则之前，所以本文件除注释外不写别的东西。 */
+@import './styles/fonts.css';
 @import './styles/tokens.css';
 @import './styles/base.css';

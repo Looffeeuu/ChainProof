@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import PageHeader from '../components/base/PageHeader.vue'
 import BaseCard from '../components/base/BaseCard.vue'
+import FlashNotice from '../components/base/FlashNotice.vue'
 import BaseButton from '../components/base/BaseButton.vue'
 import StatusBadge from '../components/base/StatusBadge.vue'
 import HashText from '../components/base/HashText.vue'
@@ -61,7 +62,7 @@ const gateReason = computed(() => {
     case 'CLOSED':
       return '这条里程碑已经有结果了，不再接受新的表态。'
     case 'NOT_IN_CLAIM':
-      return `这份声明里没有 ${me.value}，只有被声明了比例的成员才需要表态。`
+      return '这份声明里没有你，只有被声明了比例的成员才需要表态。'
     case 'ALREADY_DECIDED':
       return `你已经在 ${formatDateTime(gate.value.decidedAt)} 表过态了，表态不能撤回。`
     default:
@@ -95,7 +96,7 @@ const successText = computed(() => {
   if (!justDecided.value || !milestone.value) return ''
   const status = milestone.value.status
   if (justDecided.value === 'REJECTED') {
-    return '已记录你的拒绝。这条声明就此作废，需要提交者重新分配比例后再提交一次。'
+    return '已记录你的拒绝。这条声明作废，需要提交者修改后重新提交。'
   }
   if (status === 'VERIFIED') {
     return '已记录你的确认。声明里的成员全部确认完毕，这条记录已经写入存证。'
@@ -106,7 +107,18 @@ const successText = computed(() => {
   return '已记录你的确认。'
 })
 
+/**
+ * 表态。**拒绝先问一次。**
+ *
+ * 这一页自己写着「表态不能撤回」，而拒绝会让整条声明作废、要求提交者重来——
+ * 全站后果最重、且唯一不可逆的动作。同一个仓库里「填了一半的表单误点侧栏」
+ * 这种小得多的事都配了一次 window.confirm，这里不该反过来。
+ * 确认不拦：它推进流程，不终止流程。
+ */
 async function decide(decision) {
+  if (decision === 'REJECTED' && !window.confirm('拒绝之后这条声明作废，需要提交者修改后重新提交，而且你的表态不能撤回。确定拒绝吗？')) {
+    return
+  }
   deciding.value = decision
   decideError.value = null
   try {
@@ -128,16 +140,6 @@ async function decide(decision) {
 
 <template>
   <div>
-    <nav class="crumbs t-small t-soft" aria-label="面包屑">
-      <RouterLink to="/projects">项目</RouterLink>
-      <span aria-hidden="true">/</span>
-      <RouterLink v-if="milestone" :to="`/projects/${milestone.projectId}`">
-        {{ projectName || milestone.projectId }}
-      </RouterLink>
-      <span aria-hidden="true">/</span>
-      <span>贡献确认</span>
-    </nav>
-
     <AsyncSection
       :loading="loading"
       :error="error"
@@ -146,13 +148,30 @@ async function decide(decision) {
       error-title="没能打开这份声明"
       @retry="run(route.params.id)"
     >
-      <PageHeader eyebrow="贡献确认" :title="milestone.title" :description="milestone.description" />
+      <PageHeader :title="milestone.title" :description="milestone.description">
+        <!-- 面包屑占眉标的位置。原先眉标写「贡献确认」，上面另有一条面包屑
+             结尾也是「贡献确认」，同一处上下两行说同一件事；
+             而且那条面包屑写在 AsyncSection 外面，加载中和出错时也照挂 -->
+        <template #breadcrumb>
+          <nav class="crumbs t-small t-soft" aria-label="面包屑">
+            <RouterLink to="/projects">项目</RouterLink>
+            <span aria-hidden="true">/</span>
+            <RouterLink :to="`/projects/${milestone.projectId}`">
+              {{ projectName || milestone.projectId }}
+            </RouterLink>
+            <span aria-hidden="true">/</span>
+            <span>贡献确认</span>
+          </nav>
+        </template>
 
-      <p class="t-small t-soft meta-line">
-        提交于 {{ formatDateTime(milestone.createdAt) }}
-        <StatusBadge :status="milestone.status" />
-        <ConfirmProgress :milestone="milestone" />
-      </p>
+        <template #meta>
+          <StatusBadge :status="milestone.status" />
+          <span class="t-nums">提交于 {{ formatDateTime(milestone.createdAt) }}</span>
+          <ConfirmProgress :milestone="milestone" />
+        </template>
+      </PageHeader>
+
+      <FlashNotice />
 
       <!-- 徽章说「链上已验证」，这一行就是它的依据。
            txId 指向最近一次让这条记录进入当前状态的那笔 Fabric 交易，
@@ -160,7 +179,6 @@ async function decide(decision) {
       <p v-if="milestone.txId" class="t-small t-soft tx-line">
         <span class="t-label">链上交易</span>
         <HashText :value="milestone.txId" label="链上交易 ID" />
-        <span class="t-soft">这条记录当前状态对应的 Fabric 交易</span>
       </p>
 
       <BaseCard class="block">
@@ -174,7 +192,7 @@ async function decide(decision) {
         <p class="t-small t-soft check-intro">
           核对你手上的那份文件是不是同一份。
           <HelpTip title="为什么比哈希就够">
-            改一个字节，哈希就完全不同。文件不上传，在你的浏览器里算。
+            改一个字节，哈希就完全不同。
           </HelpTip>
         </p>
 
@@ -219,7 +237,7 @@ async function decide(decision) {
         <template v-if="gate.can">
           <p class="ask">
             这份声明把 <strong class="t-nums">{{ gate.share }}%</strong>
-            记在 {{ me }} 名下。与实际情况相符吗？
+            记在你名下。与实际情况相符吗？
           </p>
           <p class="t-small t-soft note">
             全员确认后写入存证，一人拒绝则整条作废。<strong>表态不能撤回。</strong>
@@ -232,7 +250,7 @@ async function decide(decision) {
               loading-text="提交中…"
               @click="decide('REJECTED')"
             >
-              比例不对，拒绝
+              拒绝
             </BaseButton>
             <BaseButton
               variant="primary"
@@ -255,16 +273,7 @@ async function decide(decision) {
 </template>
 
 <style scoped>
-.crumbs { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-3); }
-
-.meta-line {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  flex-wrap: wrap;
-  margin-top: calc(var(--sp-5) * -1);
-  margin-bottom: var(--sp-5);
-}
+.crumbs { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
 .tx-line {
   display: flex;
@@ -305,7 +314,6 @@ async function decide(decision) {
 
 @media (max-width: 900px) {
   .file { grid-template-columns: 1fr; gap: var(--sp-1); }
-  .meta-line { margin-top: calc(var(--sp-4) * -1); }
   .actions { flex-direction: column-reverse; align-items: stretch; }
 }
 </style>

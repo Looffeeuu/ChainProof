@@ -32,19 +32,40 @@ const matches = computed(() =>
   actual.value ? normalized(actual.value) === normalized(props.expected) : null
 )
 
+/**
+ * 和提交页同一套票据 + 取消。理由见 MilestoneCreateView.pickFile 的注释：
+ * 连着拖两个文件进来时，先发起的那次会把后发起的结果覆盖掉，
+ * 于是「一致 / 不一致」这个结论对应的是**上一个**文件。
+ * 这一页是给人核对证据用的，结论对错了比不给结论更糟。
+ */
+let checkSeq = 0
+let checkAbort = null
+
 async function check(file) {
   if (!file) return
+
+  checkAbort?.abort()
+  checkAbort = new AbortController()
+  const mine = ++checkSeq
+  const controller = checkAbort
+
   fileName.value = file.name
   actual.value = ''
   failed.value = false
   busy.value = true
   progress.value = 0
   try {
-    actual.value = await hashFile(file, { onProgress: (r) => { progress.value = r } })
-  } catch {
+    const hash = await hashFile(file, {
+      signal: controller.signal,
+      onProgress: (r) => { if (mine === checkSeq) progress.value = r }
+    })
+    if (mine !== checkSeq) return
+    actual.value = hash
+  } catch (e) {
+    if (e?.name === 'AbortError' || mine !== checkSeq) return
     failed.value = true
   } finally {
-    busy.value = false
+    if (mine === checkSeq) busy.value = false
   }
 }
 
@@ -70,9 +91,18 @@ function onDrop(event) {
       @drop.prevent="onDrop"
     >
       <input type="file" class="sr-only" @change="onPick" />
-      <span class="drop-icon" aria-hidden="true">◇</span>
+      <!-- 原先这里是一个 32px 的 ◇ 字符。字符图标在不同系统上字形差别很大，
+           也和界面里其余全部用 SVG 画的图标不是一套东西 -->
+      <span class="drop-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 15.5V4.2" />
+          <path d="m7.6 8.6 4.4-4.4 4.4 4.4" />
+          <path d="M4 15v3.4A1.6 1.6 0 0 0 5.6 20h12.8a1.6 1.6 0 0 0 1.6-1.6V15" />
+        </svg>
+      </span>
       <span class="drop-main">把{{ label }}拖到这里，或点击选择</span>
-      <span class="t-small t-soft">文件不会上传，哈希在你的浏览器里算完就结束了</span>
+      <span class="t-small t-soft">核对不会上传文件，哈希在你的浏览器里算完就结束了</span>
     </label>
 
     <p v-if="busy" class="line t-small t-soft" role="status">
@@ -81,7 +111,7 @@ function onDrop(event) {
     </p>
 
     <p v-else-if="failed" class="line t-small verdict-miss" role="alert">
-      这个文件没能读取。换一个文件再试。
+      这个文件没能读取，换一个再试。
     </p>
 
     <div v-else-if="matches !== null" class="result" :class="matches ? 'is-hit' : 'is-miss'" role="status" aria-live="polite">
@@ -121,8 +151,29 @@ function onDrop(event) {
   cursor: pointer;
   transition: border-color var(--ease), background var(--ease);
 }
-.drop:hover, .drop.is-dragging { border-color: var(--c-primary); background: var(--c-primary-weak); }
-.drop-icon { font-size: 20px; color: var(--c-text-soft); }
+/* :focus-within 是必须的。里面那个 file input 是 .sr-only（1px + clip），
+   焦点框画在那 1px 上等于看不见——键盘用户 Tab 到这里，屏幕上没有任何反应。
+   把焦点表现画在拖放区本身上 */
+.drop:hover,
+.drop.is-dragging { border-color: var(--c-primary); background: var(--c-primary-weak); }
+.drop:focus-within {
+  border-color: var(--c-primary);
+  border-style: solid;
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+.drop-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  box-shadow: inset 0 0 0 1px var(--c-border-subtle);
+  color: var(--c-text-soft);
+}
+.drop-icon svg { width: 19px; height: 19px; }
 .drop-main { font-weight: 600; }
 
 .line { display: flex; align-items: center; gap: var(--sp-2); }

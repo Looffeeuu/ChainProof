@@ -46,10 +46,11 @@ const view = computed(
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
-  padding: var(--sp-1) var(--sp-2);
-  border-radius: var(--r-sm);
+  padding: 3px var(--sp-2);
+  /* --r-xs 而不是 --r-sm：8px 圆角套在 22px 高的徽章上接近直角 */
+  border-radius: var(--r-xs);
   border: 1px solid currentColor;
-  font-size: 12px;
+  font-size: var(--fs-label);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -63,7 +64,7 @@ const view = computed(
 /* 未知取值：中性灰 + 原样显示字符串，一眼能看出是「没见过的值」而不是某种正常状态 */
 .tone--unknown {
   color: var(--c-text-soft);
-  background: var(--c-bg);
+  background: var(--c-sunken);
   font-family: var(--font-mono);
   font-weight: 400;
 }

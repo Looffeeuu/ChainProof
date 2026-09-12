@@ -59,7 +59,7 @@ const demo = useAsync(async (mode) => {
       <div class="row">
         <BaseButton variant="primary" disabled>禁用</BaseButton>
         <BaseButton variant="secondary" disabled>禁用</BaseButton>
-        <BaseButton variant="primary" loading loading-text="提交中…">提交上链</BaseButton>
+        <BaseButton variant="primary" loading loading-text="提交中…">提交并存证</BaseButton>
       </div>
       <div class="row">
         <BaseButton variant="primary" :loading="submitting" loading-text="提交中…" @click="fakeSubmit">
@@ -116,7 +116,7 @@ const demo = useAsync(async (mode) => {
     <BaseCard class="block" padding="none">
       <template #title><h2>空状态 EmptyState</h2></template>
       <EmptyState
-        icon="◇"
+        icon="chain"
         title="这个项目还没有里程碑"
         description="提交第一个里程碑后，它会出现在这里。"
       >
@@ -200,7 +200,7 @@ const demo = useAsync(async (mode) => {
 
 code {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-small);
   padding: 0 var(--sp-1);
   background: var(--c-bg);
   border-radius: var(--r-sm);

@@ -64,7 +64,7 @@ function codeOf(error) {
   border-radius: var(--r-sm);
   background: transparent;
   color: inherit;
-  font-size: 13px;
+  font-size: var(--fs-small);
   font-weight: 600;
 }
 </style>

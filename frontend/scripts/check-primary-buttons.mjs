@@ -25,9 +25,11 @@ const BASELINE = {
   'ProjectCreateView.vue': [1, '表单的提交按钮'],
   'MilestoneCreateView.vue': [1, '表单的提交按钮'],
   'MilestoneConfirmView.vue': [1, '「确认这份声明」。「拒绝」是次按钮——这一页的主操作是确认'],
-  'CertificateView.vue': [1, '「打印 / 存为 PDF」'],
+  // 2 个但不同屏：证书读到了才有「打印 / 存为 PDF」，读不到才有空状态里的「回到概览」。
+  // 这一条在把 check:buttons 接进 npm run check 之前一直是红的，只是没人跑过它
+  'CertificateView.vue': [2, '「打印 / 存为 PDF」，以及证书不存在时空状态里的「回到概览」，两者互斥'],
   'VerifyView.vue': [1, '「验证」。结果卡片里的「查看证书原件」是次按钮'],
-  'NotFoundView.vue': [0, '只有一条返回链接'],
+  'NotFoundView.vue': [1, '空状态里的「返回概览」。这一页只有这一个动作'],
   'ComponentsPreviewView.vue': [-1, '组件预览页，本来就要把所有变体摆出来，不适用这条规则']
 }
 

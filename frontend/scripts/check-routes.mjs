@@ -49,6 +49,17 @@ const cases = [
 let failed = 0
 console.log(`从 router/index.js 解析出 ${routes.length} 条路由\n`)
 
+// 正则读的是源码，读不出 `import.meta.env.DEV` 那层条件，
+// 所以 /dev/components 在下面的 cases 里照样能命中。单独钉一条：
+// 那条路由必须写在 DEV 判断里，否则它会跟着生产构建一起发出去
+{
+  const gated = /import\.meta\.env\.DEV[\s\S]{0,240}?\/dev\/components/.test(src)
+  if (!gated) failed++
+  console.log(
+    `${'/dev/components 只在开发构建注册'.padEnd(30)} ${gated ? 'OK' : 'FAIL  路由表里它没有被 import.meta.env.DEV 包住'}\n`
+  )
+}
+
 for (const [url, expect] of cases) {
   const r = router.resolve(url)
   const ok = r.name === expect

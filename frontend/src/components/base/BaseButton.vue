@@ -46,7 +46,7 @@ const props = defineProps({
   padding: 0 var(--sp-4);
   border-radius: var(--r-sm);
   border: 1px solid transparent;
-  font-size: 15px;
+  font-size: var(--fs-body);
   font-weight: 600;
   white-space: nowrap;
   transition: background var(--ease), border-color var(--ease), color var(--ease);
@@ -57,15 +57,18 @@ const props = defineProps({
 .btn--primary {
   background: var(--c-primary);
   color: var(--c-on-primary);
+  /* 主按钮是每页唯一的主操作，给它一点物理重量。
+     其余两级一律不带投影——三个按钮都浮起来就等于都没浮起来 */
+  box-shadow: var(--shadow-sm);
 }
-.btn--primary:hover:not(:disabled) { background: var(--c-text); }
+.btn--primary:hover:not(:disabled) { background: var(--c-primary-hover); }
 
 .btn--secondary {
   background: var(--c-surface);
   border-color: var(--c-border-strong);
   color: var(--c-text);
 }
-.btn--secondary:hover:not(:disabled) { background: var(--c-bg); }
+.btn--secondary:hover:not(:disabled) { background: var(--c-sunken); }
 
 .btn--ghost {
   background: transparent;

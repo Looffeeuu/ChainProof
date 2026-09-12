@@ -14,7 +14,8 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 
 import AppShell from '../src/layouts/AppShell.vue'
 import HelpTip from '../src/components/base/HelpTip.vue'
-import SettingsMenu from '../src/components/base/SettingsMenu.vue'
+import IdentityMenu from '../src/components/base/IdentityMenu.vue'
+import ThemeToggle from '../src/components/base/ThemeToggle.vue'
 
 const Blank = { render: () => h('div') }
 
@@ -37,7 +38,10 @@ export async function run() {
 
   const cases = [
     ['AppShell 外壳', AppShell, undefined],
-    ['SettingsMenu 齿轮', SettingsMenu, undefined],
+    // 原先这里是 SettingsMenu（一枚齿轮）。齿轮的画法和主题开关里的太阳同构，
+    // 两个图标按钮并排分不清，已经拆成「三格主题开关 + 身份胶囊」两个组件
+    ['IdentityMenu 身份胶囊', IdentityMenu, undefined],
+    ['ThemeToggle 主题开关', ThemeToggle, undefined],
     ['HelpTip 问号', HelpTip, { default: () => '一句说明' }]
   ]
 

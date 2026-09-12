@@ -188,17 +188,28 @@ const CHUNK = 1024 * 1024
  * 这一点必须和后端一致，否则两边永远对不上（见 spec/03 §4.2）。
  *
  * @param {Blob} file
- * @param {{ onProgress?: (ratio: number) => void }} [options]
+ * @param {{ onProgress?: (ratio: number) => void, signal?: AbortSignal }} [options]
  *        onProgress 收到 0–1 的比例。只有纯 JS 路径会多次回调，
  *        原生路径直接从 0 跳到 1——原生实现没有中途的进度可报。
+ *
+ *        signal 用标准的 AbortSignal，不引依赖。已取消时抛 AbortError，
+ *        调用方要按名字放过它（那不是失败，是用户自己叫停的）。
+ *        **只有 signal 不足以保证正确**：原生路径中途没有检查点，
+ *        取消之后它仍会跑完，只是结果被丢掉。所以调用方还必须自己拿一张票据，
+ *        判断「这次回来的结果是不是最后一次发起的」，
+ *        否则先发起的那次会把后发起的结果覆盖掉。
  * @returns {Promise<string>} 64 位小写十六进制
  */
 export async function hashFile(file, options = {}) {
-  const { onProgress } = options
+  const { onProgress, signal } = options
+  signal?.throwIfAborted()
   onProgress?.(0)
 
   if (hasNativeDigest()) {
+    // 原生路径是一次性的，中途插不进检查点。但它本来就快，
+    // 代价可以接受——算完再检查一次，已取消就把结果丢掉，不让调用方写进界面
     const digest = await globalThis.crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+    signal?.throwIfAborted()
     onProgress?.(1)
     return toHex(digest)
   }
@@ -206,13 +217,16 @@ export async function hashFile(file, options = {}) {
   // 兜底路径：切片读、分块喂。
   // 每块之间让出一次事件循环，否则大文件会把界面卡住，
   // 用户看到的是一个假死的页面而不是「正在计算」。
+  // 让出的那一刻正好是插入取消检查的地方，不需要为此改算法。
   const hasher = new Sha256()
   for (let offset = 0; offset < file.size; offset += CHUNK) {
+    signal?.throwIfAborted()
     const slice = file.slice(offset, Math.min(offset + CHUNK, file.size))
     hasher.update(new Uint8Array(await slice.arrayBuffer()))
     onProgress?.(Math.min(1, (offset + CHUNK) / file.size))
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
+  signal?.throwIfAborted()
   onProgress?.(1)
   return hasher.digest()
 }

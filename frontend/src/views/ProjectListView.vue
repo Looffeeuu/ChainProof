@@ -7,23 +7,16 @@ import EmptyState from '../components/base/EmptyState.vue'
 import AsyncSection from '../components/base/AsyncSection.vue'
 import ProjectCard from '../components/project/ProjectCard.vue'
 import { useAsync } from '../composables/useAsync.js'
-import { listProjects } from '../api/projects.js'
-import { listMilestones } from '../api/milestones.js'
+import { projectsWithMilestones } from '../api/queries.js'
 
 /**
- * 项目列表。版式照 界面预览.html 的「项目」屏。
+ * 项目列表。
  *
  * 每张卡片要显示里程碑进度，而 spec/02 §5.1 只有「按项目取里程碑」这一个接口，
- * 所以在这里一次性取好再分发给卡片，不让每张卡片自己去取——
+ * 所以在 api/queries.js 里一次性取好再分发给卡片，不让每张卡片自己去取——
  * 卡片自己取的话，请求会散在 N 个组件里，加载态也就变成 N 个各转各的圈。
  */
-async function loadProjects() {
-  const projects = await listProjects()
-  const lists = await Promise.all(projects.map((p) => listMilestones(p.projectId)))
-  return projects.map((project, i) => ({ project, milestones: lists[i] }))
-}
-
-const { data, loading, error, run } = useAsync(loadProjects)
+const { data, loading, error, run } = useAsync(projectsWithMilestones)
 onMounted(run)
 
 // 空状态里已经有一个「创建项目」主按钮，页头那个这时降级，
@@ -33,10 +26,11 @@ const isEmpty = computed(() => data.value?.length === 0)
 
 <template>
   <div>
-    <PageHeader
-      eyebrow="项目"
-      title="项目"
-         >
+    <!-- 原先这里 eyebrow 和 title 都写着「项目」，同一个词上下叠两遍。
+         眉标的用处是交代上一层的位置，和标题重复时它没有信息，直接去掉 -->
+    <!-- 不写 description，理由同概览页：卡片上已经有进度条、摘要与计数，
+         再用一句话复述一遍流程，读者不会因此多知道任何事 -->
+    <PageHeader title="项目">
       <template #actions>
         <BaseButton :variant="isEmpty ? 'secondary' : 'primary'" @click="$router.push('/projects/new')">创建项目</BaseButton>
       </template>
@@ -53,8 +47,9 @@ const isEmpty = computed(() => data.value?.length === 0)
       <template #empty>
         <BaseCard>
           <EmptyState
+            icon="box"
             title="还没有任何项目"
-            description="创建后会出现在这里。"
+            description="创建后会出现在这里，卡片上会显示里程碑的存证进度。"
           >
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects/new')">

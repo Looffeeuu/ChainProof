@@ -476,6 +476,83 @@ await check('hashFile 在没有 crypto.subtle 时仍然能算（http 场景）',
   return '原生路径与兜底路径结果一致'
 })
 
+await check('hashFile 收到已取消的 signal 时抛 AbortError，不返回结果', async () => {
+  const controller = new AbortController()
+  controller.abort()
+  let thrown = null
+  try {
+    await hashFile(new Blob([randomBytes(1000)]), { signal: controller.signal })
+  } catch (e) {
+    thrown = e
+  }
+  assert(thrown, '已取消的 signal 应当让它抛错，而不是照常算完')
+  assert(thrown.name === 'AbortError', `抛的是 ${thrown.name}，应当是 AbortError`)
+  return '开算前就检查一次'
+})
+
+await check('hashFile 在计算途中被取消，不会把结果算完返回（兜底路径）', async () => {
+  // 兜底路径按 1MB 分片，每片之间检查一次 signal。
+  // 造一个 3MB 的输入，第一次进度回调时叫停，它应当在下一片之前退出。
+  const bytes = randomBytes(3 * 1024 * 1024)
+  const real = globalThis.crypto
+  try {
+    Object.defineProperty(globalThis, 'crypto', { value: {}, configurable: true })
+    assert(!hasNativeDigest(), '没能模拟出「没有 crypto.subtle」的环境')
+
+    const controller = new AbortController()
+    let thrown = null
+    try {
+      await hashFile(new Blob([bytes]), {
+        signal: controller.signal,
+        onProgress: (r) => { if (r > 0 && r < 1) controller.abort() }
+      })
+    } catch (e) {
+      thrown = e
+    }
+    assert(thrown?.name === 'AbortError', '中途取消应当抛 AbortError')
+  } finally {
+    Object.defineProperty(globalThis, 'crypto', { value: real, configurable: true })
+  }
+  return '每片之间都检查'
+})
+
+/**
+ * 这条守的是一个**正确性缺陷**，不是体验问题。
+ *
+ * 提交里程碑那一页原先没有任何竞态保护：先选大文件、没算完又换小文件时，
+ * 小文件先算完写进 fileHash，大文件后算完把它覆盖掉——
+ * 最终提交的是「文件 B + 文件 A 的哈希」，一条错误的存证记录。
+ *
+ * 组件里的票据没法在这里直接测（要跑 Vue），所以这里测的是同一套逻辑的骨架：
+ * 只有「最后一次发起的」才有权写结果。写法与
+ * MilestoneCreateView.pickFile / FileHashCheck.check 里的一致，
+ * 那两处改坏了这条不会红，但它至少钉住了这个模式本身是对的。
+ */
+await check('后发起的哈希计算不会被先发起的覆盖（票据模式）', async () => {
+  let seq = 0
+  let written = null
+
+  async function pick(bytes, delayMs) {
+    const mine = ++seq
+    const hash = await new Promise((resolve) =>
+      setTimeout(() => resolve(createHash('sha256').update(bytes).digest('hex')), delayMs)
+    )
+    if (mine !== seq) return          // 已经有更新的一次了，作废
+    written = hash
+  }
+
+  const big = randomBytes(64)
+  const small = randomBytes(64)
+  // 先发起「慢的那次」，再发起「快的那次」
+  const slow = pick(big, 40)
+  const fast = pick(small, 5)
+  await Promise.all([slow, fast])
+
+  const wantSmall = createHash('sha256').update(small).digest('hex')
+  assert(written === wantSmall, '先发起的那次把后发起的结果覆盖了')
+  return '慢的那次回来时已经作废'
+})
+
 await check('提交里程碑时，前端算出的哈希会被带进新建的里程碑', async () => {
   const hash = sha256Bytes(new TextEncoder().encode('假装这是一个成果文件'))
   const created = await api.createMilestone('P001', {

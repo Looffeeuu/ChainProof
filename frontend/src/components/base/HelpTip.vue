@@ -82,7 +82,9 @@ onBeforeUnmount(detach)
   border-radius: 999px;
   background: transparent;
   color: var(--c-text-soft);
-  font-size: 11px;
+  /* 原来是 11px——排版档位之外、也没登记过的失误（spec/01 §2.3）。
+     11px 的中文在投影仪上读不出来 */
+  font-size: var(--fs-label);
   font-weight: 700;
   line-height: 1;
 }
@@ -102,7 +104,7 @@ onBeforeUnmount(detach)
   border-radius: var(--r-sm);
   background: var(--c-surface);
   box-shadow: var(--shadow-lg);
-  font-size: 13px;
+  font-size: var(--fs-small);
   font-weight: 400;
   line-height: 1.5;
   color: var(--c-text);

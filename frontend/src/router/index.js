@@ -60,14 +60,22 @@ const routes = [
     component: () => import('../views/VerifyView.vue'),
     meta: { title: '公开验证', nav: 'verify' }
   },
-  {
-    // 开发用：把基础组件的所有状态摆在一页，FE-4 的验收方式。
-    // 它不属于 spec/01 §2.7 的页面清单，所以放在 /dev 前缀下，侧栏里也没有入口。
-    path: '/dev/components',
-    name: 'dev-components',
-    component: () => import('../views/ComponentsPreviewView.vue'),
-    meta: { title: '基础组件预览' }
-  },
+  // 开发用：把基础组件的所有状态摆在一页，FE-4 的验收方式。
+  // 它不属于 spec/01 §2.7 的页面清单，所以放在 /dev 前缀下。
+  //
+  // **只在开发构建里注册。** 光把侧栏入口藏进「开发视角」是不够的，
+  // 路由还在，敲地址就能打开——而这一页上写着 WCAG 编号、组件名、padding 取值，
+  // 是给改代码的人看的。生产构建里它连同那个 chunk 一起消失。
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/dev/components',
+          name: 'dev-components',
+          component: () => import('../views/ComponentsPreviewView.vue'),
+          meta: { title: '基础组件预览' }
+        }
+      ]
+    : []),
   {
     // 兜底必须放最后：路由表按顺序匹配，放前面会把后面的全吃掉
     path: '/:pathMatch(.*)*',
