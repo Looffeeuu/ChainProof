@@ -55,12 +55,10 @@ const routes = [
   },
   {
     // id 可选：不带 id 时显示输入框，带 id 时直接出结果（spec/01 §2.7）。
-    // layout: 'bare' —— 这一页给项目外的人看，不该出现侧栏里那些他们进不去的入口，
-    // 更不该出现演示身份切换器（理由见 layouts/BareLayout.vue）
     path: '/verify/:id?',
     name: 'verify',
     component: () => import('../views/VerifyView.vue'),
-    meta: { title: '公开验证', nav: 'verify', layout: 'bare' }
+    meta: { title: '公开验证', nav: 'verify' }
   },
   {
     // 开发用：把基础组件的所有状态摆在一页，FE-4 的验收方式。

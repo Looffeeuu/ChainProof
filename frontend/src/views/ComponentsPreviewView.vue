@@ -119,7 +119,7 @@ const demo = useAsync(async (mode) => {
       <EmptyState
         icon="◇"
         title="这个项目还没有里程碑"
-        description="提交第一个里程碑后，它会以时间线的形式出现在这里，包含文件哈希与每位成员的贡献比例。"
+        description="提交第一个里程碑后，它会出现在这里。"
       >
         <template #action>
           <BaseButton variant="primary">提交里程碑</BaseButton>
@@ -174,7 +174,6 @@ const demo = useAsync(async (mode) => {
       <template #title><h2>卡片 BaseCard</h2></template>
       <template #actions><BaseButton variant="ghost">操作区</BaseButton></template>
       <div class="cards">
-        <BaseCard padding="tight"><p class="t-small">padding = tight</p></BaseCard>
         <BaseCard><p class="t-small">padding = normal（默认）</p></BaseCard>
         <BaseCard floating><p class="t-small">floating：大阴影、无边框，只给弹层用</p></BaseCard>
       </div>

@@ -67,7 +67,7 @@ const verdict = computed(() => {
     <PageHeader
       eyebrow="公开验证"
       title="验证一份贡献证明"
-      description="输入证书编号，核对它是否与存证记录一致。不需要登录，任何人都可以查。"
+      description="输入证书编号，核对它是否与存证记录一致。"
     />
 
     <BaseCard class="form-card">

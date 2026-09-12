@@ -105,7 +105,6 @@ async function submit() {
     <PageHeader
       eyebrow="项目"
       title="创建项目"
-      description="建好之后就可以往里面提交里程碑。"
     />
 
     <BaseCard class="form-card">

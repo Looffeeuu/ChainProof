@@ -63,7 +63,6 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
     <PageHeader
       eyebrow="概览"
       title="ChainProof"
-      description="让团队里的每一份贡献可追溯、可验证。"
     >
       <template #actions>
         <BaseButton :variant="isEmpty ? 'secondary' : 'primary'" @click="$router.push('/projects/new')">
@@ -84,7 +83,7 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
         <BaseCard>
           <EmptyState
             title="还没有任何项目"
-            description="创建第一个项目后，这里会显示项目数、已验证的里程碑数，以及最近的存证活动。"
+            description="创建第一个项目后，这里会显示统计与最近活动。"
           >
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects/new')">

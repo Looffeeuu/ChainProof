@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { session } from '../stores/session.js'
 import { useAsync } from '../composables/useAsync.js'
@@ -23,6 +23,10 @@ const { data: counts, run: loadCounts } = useAsync(async () => {
   return { projects: projects.length }
 })
 onMounted(loadCounts)
+
+// 侧栏在 RouterView 外面，换身份时不会跟着重新挂载，得自己重取一次。
+// 否则项目数还停在上一个人看到的那个数字
+watch(() => session.currentMemberId, loadCounts)
 
 const groups = computed(() => [
   {
@@ -90,7 +94,12 @@ const activeNav = computed(() => route.meta.nav ?? route.name ?? '')
     </aside>
 
     <main id="main" ref="main" tabindex="-1" class="content">
-      <RouterView />
+      <!-- key 绑当前身份：换人时整棵页面重新挂载，onMounted 重新跑，数据重新取。
+           不这么做的话，切到 bob 之后页面上还留着 alice 那一份数据——
+           连他没参与的项目都还在列表里。
+           副作用是切身份会清空填了一半的表单，这是对的：
+           以 alice 的身份填到一半、以 bob 的身份提交，本来就不该发生。 -->
+      <RouterView :key="session.currentMemberId" />
     </main>
   </div>
 </template>

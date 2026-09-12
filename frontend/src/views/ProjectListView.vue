@@ -36,8 +36,7 @@ const isEmpty = computed(() => data.value?.length === 0)
     <PageHeader
       eyebrow="项目"
       title="项目"
-      description="你参与的全部项目。"
-    >
+         >
       <template #actions>
         <BaseButton :variant="isEmpty ? 'secondary' : 'primary'" @click="$router.push('/projects/new')">创建项目</BaseButton>
       </template>
@@ -55,7 +54,7 @@ const isEmpty = computed(() => data.value?.length === 0)
         <BaseCard>
           <EmptyState
             title="还没有任何项目"
-            description="创建第一个项目后，它会出现在这里，显示成员、里程碑数量与确认进度。"
+            description="创建第一个项目后，它会出现在这里。"
           >
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects/new')">

@@ -6,12 +6,10 @@ import { session } from '../../stores/session.js'
 /**
  * 齿轮。把两个只跟「怎么看」有关的开关收到一处，不让它们占界面。
  *
- * 里面只有两样：
- * - **视角**：用户 / 开发。开发视角多显示链上交易 ID 与组件预览入口。
- * - **当前身份**：演示用。切换后能看到同一条记录在不同成员眼里的样子。
+ * 里面只有两样：**视角**（用户 / 开发，开发视角多出组件预览入口）
+ * 和**当前身份**（演示用）。
  *
- * 两样都只在前端生效。身份会作为请求头 X-Member-Id 发出去，
- * 视角则完全不出前端。
+ * 身份会作为请求头 X-Member-Id 发出去，视角完全不出前端。
  */
 const open = ref(false)
 const root = ref(null)
@@ -80,9 +78,7 @@ onBeforeUnmount(detach)
             @click="settings.setMode('dev')"
           >开发</button>
         </div>
-        <p class="t-small t-soft note">
-          开发视角会多显示链上交易 ID 和组件预览入口。
-        </p>
+        <p class="t-small t-soft note">开发视角会多出组件预览入口。</p>
       </div>
 
       <div class="group">
@@ -96,9 +92,6 @@ onBeforeUnmount(detach)
             @click="session.switchTo(m)"
           >{{ m }}</button>
         </div>
-        <p class="t-small t-soft note">
-          换个人看同一条记录。待确认的里程碑只对声明里的人显示确认按钮。
-        </p>
       </div>
     </div>
   </div>

@@ -150,7 +150,6 @@ async function submit() {
     <PageHeader
       eyebrow="里程碑"
       title="提交里程碑"
-      description="提交成果文件，并声明每位成员的贡献比例。"
     />
 
     <AsyncSection

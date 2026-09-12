@@ -117,7 +117,7 @@ async function issueCertificate() {
       <!-- data 为空且没报错，正常流程走不到；留着是为了不出现读 project.name 的白屏 -->
       <template #empty>
         <BaseCard>
-          <EmptyState title="没有这个项目的数据" description="链接里的项目 ID 可能已经失效。回到项目列表看看。">
+          <EmptyState title="没有这个项目的数据" description="链接里的项目 ID 可能已经失效。">
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects')">
                 回到项目列表
@@ -219,7 +219,7 @@ async function issueCertificate() {
         <EmptyState
           v-if="milestones.length === 0"
           title="这个项目还没有里程碑"
-          description="提交第一份成果后，它会出现在这条时间线上：文件哈希、贡献比例、以及每位成员的确认状态。"
+          description="提交第一份成果后，它会出现在这条时间线上。"
         >
           <template #action>
             <BaseButton variant="primary" @click="$router.push(newMilestonePath)">

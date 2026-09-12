@@ -3,15 +3,16 @@
  * 卡片：细边框 + 极淡阴影。spec/01 §2.4 规定边框与阴影不叠加使用，
  * 这里把「常态卡片长什么样」固定成一处，页面不再各写各的。
  *
- * padding 给两档：默认 --sp-5，紧凑场景（表格行、小统计块）用 tight。
- * 不开放任意 padding，否则档位规则马上就被绕过去了。
+ * padding 只有两档：默认 --sp-5，以及 none（表格、时间线这种自己控制内边距的）。
+ * 曾经还有一档 tight（--sp-4），但除了组件预览页没有任何地方在用——
+ * 16 和 24 的差别小到没人会为它专门选一次，留着只是多一个要解释的选项。
  */
 defineProps({
   as: { type: String, default: 'section' },
   padding: {
     type: String,
     default: 'normal',
-    validator: (v) => ['normal', 'tight', 'none'].includes(v)
+    validator: (v) => ['normal', 'none'].includes(v)
   },
   // 真正浮在页面上的东西（弹层）才用大阴影且不要边框
   floating: { type: Boolean, default: false }
@@ -37,7 +38,6 @@ defineProps({
 }
 
 .pad--normal { padding: var(--sp-5); }
-.pad--tight { padding: var(--sp-4); }
 .pad--none { padding: 0; }
 
 .is-floating {
