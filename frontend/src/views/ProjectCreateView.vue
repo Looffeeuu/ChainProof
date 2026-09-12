@@ -113,7 +113,7 @@ async function submit() {
           v-slot="f"
           label="项目名称"
           required
-          :hint="`一眼能认出是哪个项目，最多 ${NAME_MAX} 个字符。`"
+          :hint="`最多 ${NAME_MAX} 字`"
           :error="touched.name ? errors.name : ''"
         >
           <input
@@ -130,7 +130,7 @@ async function submit() {
         <FormField
           v-slot="f"
           label="项目描述"
-          hint="可以留空，之后再补。"
+          hint="可留空"
           :error="errors.description"
         >
           <textarea
@@ -146,7 +146,7 @@ async function submit() {
         <FormField
           label="成员"
           required
-          hint="负责人默认参与，不能取消。"
+          hint="负责人默认参与"
           :error="touched.members ? errors.members : ''"
         >
           <div class="members">

@@ -78,7 +78,6 @@ onBeforeUnmount(detach)
             @click="settings.setMode('dev')"
           >开发</button>
         </div>
-        <p class="t-small t-soft note">开发视角会多出组件预览入口。</p>
       </div>
 
       <div class="group">

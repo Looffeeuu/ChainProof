@@ -71,7 +71,7 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
     </div>
 
     <footer class="foot">
-      <p class="t-small t-soft">任何人都可以在下列地址核验这份证书的真伪，不需要登录：</p>
+      <p class="t-small t-soft">核验地址（无需登录）：</p>
       <p class="t-small t-mono url">{{ verifyUrl }}</p>
     </footer>
   </article>

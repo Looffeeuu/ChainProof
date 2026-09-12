@@ -123,7 +123,7 @@ function giveRemainderTo(memberId) {
           type="button"
           class="t-small link fill"
           :disabled="valid"
-          :aria-label="`把${remaining >= 0 ? '还差的' : '超出的'} ${Math.abs(remaining)}% 记到 ${c.memberId} 头上`"
+          :aria-label="`把 ${Math.abs(remaining)}% 记到 ${c.memberId} 头上`"
           @click="giveRemainderTo(c.memberId)"
         >
           {{ remaining >= 0 ? `补 ${remaining}%` : `减 ${-remaining}%` }}

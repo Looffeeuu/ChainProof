@@ -83,7 +83,7 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
         <BaseCard>
           <EmptyState
             title="还没有任何项目"
-            description="创建第一个项目后，这里会显示统计与最近活动。"
+            description="这里会显示统计与最近活动。"
           >
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects/new')">
@@ -119,7 +119,7 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
         <EmptyState
           v-if="data.recent.length === 0"
           title="还没有里程碑"
-          description="往项目里提交第一份成果后，它会出现在这里。"
+          description="提交成果后会出现在这里。"
         />
 
         <ul v-else class="feed">
@@ -150,7 +150,7 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
         <EmptyState
           v-if="data.certificates.length === 0"
           title="还没有签发过贡献证明"
-          description="项目里有里程碑通过全员确认后，就可以为成员签发。"
+          description="有里程碑通过全员确认后即可签发。"
         />
 
         <ul v-else class="feed">

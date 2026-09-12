@@ -169,7 +169,7 @@ async function submit() {
               v-slot="f"
               label="标题"
               required
-              hint="会出现在项目时间线上。"
+              hint="会出现在时间线上"
               :error="touched.title ? errors.title : ''"
             >
               <input
@@ -186,7 +186,7 @@ async function submit() {
             <FormField
               v-slot="f"
               label="说明"
-              hint="做了哪些改动、和上一版的差别。"
+              hint="改了什么、和上一版的差别"
               :error="errors.description"
             >
               <textarea
@@ -203,7 +203,7 @@ async function submit() {
               v-slot="f"
               label="成果文件"
               required
-              hint="文件会上传保存，供团队成员之后取用。"
+              hint="会上传保存，供成员取用"
               :error="touched.file ? errors.file : ''"
             >
               <input :id="f.id" type="file" :aria-describedby="f.describedBy" @change="pickFile" />

@@ -78,8 +78,7 @@ const demo = useAsync(async (mode) => {
       </div>
       <p class="t-small t-soft">
         每个徽章都是符号 + 文字，不只靠颜色（WCAG SC 1.4.1）。
-        最后一个 <code>SOMETHING_NEW</code> 不在 spec/02 §2.3 的清单里，
-        渲染成中性徽章并原样显示字符串——接口改了取值时前端不会假装正常。
+        最后一个 <code>SOMETHING_NEW</code> 不在已知清单里，渲染成中性徽章并原样显示字符串。
       </p>
     </BaseCard>
 
@@ -134,7 +133,7 @@ const demo = useAsync(async (mode) => {
         <ErrorNotice :error="demoError" title="没能读到项目列表" retryable />
       </div>
       <p class="t-small t-soft">
-        接口给的 message 原样显示，不替换成「操作失败」（spec/01 §2.6）。
+        接口给的 message 原样显示，不替换成「操作失败」。
         <code>code</code> 单独一行，供排查用。
       </p>
     </BaseCard>

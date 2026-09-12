@@ -174,8 +174,7 @@ async function decide(decision) {
         <p class="t-small t-soft check-intro">
           核对你手上的那份文件是不是同一份。
           <HelpTip title="为什么比哈希就够">
-            哈希是文件内容的指纹。改动一个字节，这串数就完全不同，
-            所以两边哈希一致就说明是同一份文件。文件不会上传，计算在你的浏览器里完成。
+            改一个字节，哈希就完全不同。文件不上传，在你的浏览器里算。
           </HelpTip>
         </p>
 

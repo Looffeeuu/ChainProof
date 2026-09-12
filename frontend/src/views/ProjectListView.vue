@@ -54,7 +54,7 @@ const isEmpty = computed(() => data.value?.length === 0)
         <BaseCard>
           <EmptyState
             title="还没有任何项目"
-            description="创建第一个项目后，它会出现在这里。"
+            description="创建后会出现在这里。"
           >
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects/new')">

@@ -72,11 +72,7 @@ const verdict = computed(() => {
 
     <BaseCard class="form-card">
       <form novalidate @submit.prevent="submit">
-        <FormField
-          v-slot="f"
-          label="证书编号"
-          hint="证书页面底部印着完整编号，例如 CERT-P001-ALICE。"
-        >
+        <FormField v-slot="f" label="证书编号">
           <div class="row">
             <input
               :id="f.id"
@@ -111,10 +107,7 @@ const verdict = computed(() => {
     <!-- 查无此证不是错误，是一个有效的验证结果，所以不走 ErrorNotice -->
     <BaseCard v-else-if="verdict === 'missing'" class="result miss">
       <p class="verdict">没有找到编号为 <span class="t-mono">{{ result.certificateId }}</span> 的证书。</p>
-      <p class="t-small t-soft">
-        可能是编号抄错了（注意区分数字 0 和字母 O），也可能这份证书从未签发过。
-        向出示证书的人要一份完整链接是最快的办法。
-      </p>
+      <p class="t-small t-soft">编号可能抄错了（注意 0 和 O），或者这份证书从未签发。</p>
     </BaseCard>
 
     <BaseCard v-else-if="verdict" class="result" :class="verdict === 'verified' ? 'hit' : 'other'">
@@ -124,10 +117,7 @@ const verdict = computed(() => {
         <template v-else>查到了这份证书，但它的状态不是「已验证」。</template>
         <StatusBadge :status="result.verificationStatus" />
       </p>
-      <p v-if="verdict === 'other'" class="t-small t-soft">
-        下面的内容来自存证记录，但这份证书当前并不处于有效状态。
-        以出具证书的一方的说明为准。
-      </p>
+      <p v-if="verdict === 'other'" class="t-small t-soft">以下内容来自存证记录。</p>
 
       <dl class="facts">
         <div>

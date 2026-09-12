@@ -165,8 +165,7 @@ async function issueCertificate() {
               />
             </div>
             <p class="t-small t-soft foot">
-              「各条相加」是每人在各条里程碑上声明比例的直接和，不是百分比。
-              上方的累计占比是把这几个数按比例缩放到总和 100 的结果。
+              「各条相加」是直接求和，不是百分比；上方的占比是它缩放到 100 的结果。
             </p>
           </details>
 
@@ -219,7 +218,7 @@ async function issueCertificate() {
         <EmptyState
           v-if="milestones.length === 0"
           title="这个项目还没有里程碑"
-          description="提交第一份成果后，它会出现在这条时间线上。"
+          description="提交成果后会出现在这条时间线上。"
         >
           <template #action>
             <BaseButton variant="primary" @click="$router.push(newMilestonePath)">

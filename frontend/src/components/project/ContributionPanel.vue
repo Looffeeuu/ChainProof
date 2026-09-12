@@ -22,10 +22,7 @@ const TONES = ['primary', 'verified', 'pending', 'rejected']
        用户才不会去怀疑是不是页面坏了。 -->
   <div v-if="members.length === 0" class="empty">
     <p class="t-soft">还没有可统计的贡献比例。</p>
-    <p class="t-small t-soft">
-      比例只统计状态为「链上已验证」的里程碑。这个项目目前还没有任何一条走完全员确认，
-      等第一条通过之后，这里会出现每位成员的累计占比。
-    </p>
+    <p class="t-small t-soft">里程碑通过全员确认后，这里会出现每人的累计占比。</p>
   </div>
 
   <div v-else class="panel">
