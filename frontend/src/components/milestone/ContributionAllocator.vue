@@ -153,7 +153,7 @@ function giveRemainderTo(memberId) {
   margin-left: auto;
   border: none;
   background: none;
-  color: var(--c-primary);
+  color: var(--c-primary-text);
   font-weight: 600;
 }
 .link:disabled { color: var(--c-text-soft); cursor: not-allowed; }

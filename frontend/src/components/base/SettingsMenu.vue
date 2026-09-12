@@ -114,7 +114,7 @@ onBeforeUnmount(detach)
   transition: color var(--ease), background var(--ease);
 }
 .gear:hover { color: var(--c-text); background: var(--c-bg); }
-.gear[aria-expanded='true'] { color: var(--c-primary); background: var(--c-primary-weak); }
+.gear[aria-expanded='true'] { color: var(--c-primary-text); background: var(--c-primary-weak); }
 
 .panel {
   position: absolute;
@@ -152,7 +152,7 @@ onBeforeUnmount(detach)
 .seg button:hover { background: var(--c-bg); }
 .seg button[aria-pressed='true'] {
   background: var(--c-primary-weak);
-  color: var(--c-primary);
+  color: var(--c-primary-text);
   font-weight: 600;
 }
 

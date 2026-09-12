@@ -94,7 +94,7 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
 .seal { margin-top: var(--sp-3); }
 
 .lead { text-align: center; max-width: 52ch; margin: 0 auto; }
-.subject { color: var(--c-primary); }
+.subject { color: var(--c-primary-text); }
 
 .figure {
   text-align: center;

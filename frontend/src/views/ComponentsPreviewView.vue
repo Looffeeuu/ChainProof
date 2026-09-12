@@ -197,7 +197,7 @@ const demo = useAsync(async (mode) => {
 
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-4); }
 
-.primary-tone { color: var(--c-primary); display: inline-flex; }
+.primary-tone { color: var(--c-primary-text); display: inline-flex; }
 
 code {
   font-family: var(--font-mono);

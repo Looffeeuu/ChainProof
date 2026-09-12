@@ -56,7 +56,7 @@ const props = defineProps({
 
 .btn--primary {
   background: var(--c-primary);
-  color: var(--c-surface);
+  color: var(--c-on-primary);
 }
 .btn--primary:hover:not(:disabled) { background: var(--c-text); }
 
@@ -69,7 +69,7 @@ const props = defineProps({
 
 .btn--ghost {
   background: transparent;
-  color: var(--c-primary);
+  color: var(--c-primary-text);
   padding: 0 var(--sp-2);
 }
 .btn--ghost:hover:not(:disabled) { background: var(--c-primary-weak); }

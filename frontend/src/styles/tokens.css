@@ -1,30 +1,113 @@
 /* 设计令牌：全工程唯一允许出现颜色与间距字面量的文件。
-   来源与理由见 ../../../../spec/01-设计系统.md §2。改这里之前先改那份规范。 */
+   来源与理由见 ../../../../spec/01-设计系统.md §2，暗色部分见 §2.8。
+   改这里之前先改那份规范。
+
+   三套颜色，优先级从低到高：
+     :root                                        亮色，默认
+     @media (prefers-color-scheme: dark) 里的      跟随系统时的暗色
+     :root[data-theme='dark']                     用户强制暗色
+
+   「强制亮色」不需要单独写一套——它靠 [data-theme='light'] 把媒体查询那一套
+   排除掉，从而落回 :root 的默认值。 */
+
 :root {
-  /* 颜色 */
+  /* 让浏览器知道我们两种都支持。它管的是浏览器自己画的那部分：
+     画布底色、滚动条、表单控件默认样式、拼写检查下划线。
+     不声明的话，暗色页面上会配一条亮色滚动条。 */
+  color-scheme: light dark;
+
+  /* —— 颜色（亮色） —— */
   --c-bg: #f7f8fa;
   --c-surface: #ffffff;
+  --c-raised: #ffffff;          /* 弹层。亮色下与卡片同色，靠阴影区分 */
   --c-border-subtle: #e6e8ec;
   --c-border-strong: #7d8798;
   --c-text: #111827;
   --c-text-soft: #5a6473;
-  --c-primary: #2b52d8;
-  --c-primary-weak: #eef2ff;
+
+  /* 主色分成两个令牌，不是为了好看，是因为一个值在暗色下没法同时胜任两件事：
+     实心填充要够深才压得住白字，文字要够亮才读得清（spec/01 §2.8.2）。
+     亮色下两者同值，所以这次拆分不改变亮色的任何观感。 */
+  --c-primary: #2b52d8;         /* 实心填充：主按钮背景 */
+  --c-primary-text: #2b52d8;    /* 文字与图标：链接、选中项 */
+  --c-on-primary: #ffffff;      /* 压在实心主色上的文字。见下方注释，不能借用 --c-surface */
+  --c-primary-weak: #eef2ff;    /* 浅底：选中行、标签底 */
+
   --c-verified: #0a6c46;      --c-verified-bg: #e7f5ee;
   --c-pending: #8a4b06;       --c-pending-bg: #fdf3e4;
   --c-rejected: #b02318;      --c-rejected-bg: #fdece9;
 
-  /* 间距 */
+  /* —— 间距 —— */
   --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
   --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
 
-  /* 圆角与阴影 */
+  /* —— 圆角、阴影、动效 —— */
   --r-sm: 8px; --r-lg: 16px;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06);
   --shadow-lg: 0 12px 32px rgba(16, 24, 40, .10);
   --ease: 160ms cubic-bezier(.2, .6, .3, 1);
 
-  /* 字体 */
+  /* —— 字体 —— */
   --font-sans: Inter, ui-sans-serif, system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Noto Sans Mono", monospace;
+}
+
+/* 暗色的那一套值。写成一个自定义属性集合，下面两处引用同一份，
+   避免同样的十几个值抄两遍——抄两遍必然有一天会改漏一处。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --c-bg: #111111;            /* Radix gray-1。不用纯黑：阴影会完全看不见 */
+    --c-surface: #191919;       /* Radix gray-2，比底色亮一档 */
+    --c-raised: #222222;        /* Radix gray-3，弹层比卡片再亮一档 */
+    --c-border-subtle: #3a3a3a; /* Radix gray-6，装饰性分隔 */
+    --c-border-strong: #707070; /* 控件边框，在最亮的表面上也有 3.21:1 */
+    --c-text: #eeeeee;          /* Radix gray-12。三家没有一家用纯白 */
+    --c-text-soft: #b4b4b4;     /* Radix gray-11 */
+
+    --c-primary: #3560e0;       /* 比亮色略提亮：按钮本身相对底色要够 3:1 */
+    --c-primary-text: #70b8ff;  /* Radix blue-11 dark */
+    --c-on-primary: #ffffff;
+    --c-primary-weak: #16233f;
+
+    --c-verified: #3dd68c;      --c-verified-bg: #12281d;
+    --c-pending: #ffca16;       --c-pending-bg: #2a2109;
+    --c-rejected: #ff9592;      --c-rejected-bg: #2d1516;
+
+    /* 暗色下阴影几乎看不出来，分层主要靠表面变亮 + 边框。
+       这里保留阴影但加重，让弹层与卡片之间仍有一点纵深。 */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .5);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, .6);
+  }
+}
+
+/* 用户在设置里强制选了暗色。优先级要压过媒体查询，所以放在后面，
+   并且用属性选择器（比 :root 多一层特异性）。 */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --c-bg: #111111;
+  --c-surface: #191919;
+  --c-raised: #222222;
+  --c-border-subtle: #3a3a3a;
+  --c-border-strong: #707070;
+  --c-text: #eeeeee;
+  --c-text-soft: #b4b4b4;
+
+  --c-primary: #3560e0;
+  --c-primary-text: #70b8ff;
+  --c-on-primary: #ffffff;
+  --c-primary-weak: #16233f;
+
+  --c-verified: #3dd68c;      --c-verified-bg: #12281d;
+  --c-pending: #ffca16;       --c-pending-bg: #2a2109;
+  --c-rejected: #ff9592;      --c-rejected-bg: #2d1516;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .5);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, .6);
+}
+
+/* 强制亮色：只需要把 color-scheme 摆正，颜色值本来就是 :root 那一套。
+   上面的媒体查询已经用 :not([data-theme='light']) 把这种情况排除掉了。 */
+:root[data-theme='light'] {
+  color-scheme: light;
 }

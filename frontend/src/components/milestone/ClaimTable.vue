@@ -80,7 +80,7 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 0 var(--sp-1);
   border-radius: var(--r-sm);
   background: var(--c-primary-weak);
-  color: var(--c-primary);
+  color: var(--c-primary-text);
   font-weight: 600;
 }
 

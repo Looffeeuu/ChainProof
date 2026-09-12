@@ -112,7 +112,7 @@ const TONE = {
 }
 
 .title { font-weight: 600; color: var(--c-text); }
-.title:hover { color: var(--c-primary); }
+.title:hover { color: var(--c-primary-text); }
 
 .desc { max-width: 72ch; }
 
@@ -123,7 +123,7 @@ const TONE = {
   flex-wrap: wrap;
 }
 
-.more { color: var(--c-primary); }
+.more { color: var(--c-primary-text); }
 
 .tx { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 </style>

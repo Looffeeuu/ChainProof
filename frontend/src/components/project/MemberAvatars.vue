@@ -67,7 +67,7 @@ const initialOf = (id) => String(id).slice(0, 1).toUpperCase()
 .tone--verified { background: var(--c-verified-bg); color: var(--c-verified); }
 .tone--pending { background: var(--c-pending-bg); color: var(--c-pending); }
 .tone--rejected { background: var(--c-rejected-bg); color: var(--c-rejected); }
-.tone--primary { background: var(--c-primary-weak); color: var(--c-primary); }
+.tone--primary { background: var(--c-primary-weak); color: var(--c-primary-text); }
 /* 12px 是排版五级里的最小一档（spec/01 §2.3）。这里原来写的是 11px，
    属于没有理由的失误——11px 的中文在投影仪上读不出来 */
 .tone--rest { background: var(--c-bg); color: var(--c-text-soft); font-size: 12px; }

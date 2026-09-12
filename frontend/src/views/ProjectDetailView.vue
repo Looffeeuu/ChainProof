@@ -257,7 +257,7 @@ async function issueCertificate() {
 .col { display: flex; flex-direction: column; }
 
 .detail { margin-top: var(--sp-4); border-top: 1px solid var(--c-border-subtle); padding-top: var(--sp-3); }
-.detail summary { cursor: pointer; color: var(--c-primary); font-weight: 600; }
+.detail summary { cursor: pointer; color: var(--c-primary-text); font-weight: 600; }
 .table-wrap { overflow-x: auto; margin-top: var(--sp-3); }
 .foot { margin-top: var(--sp-3); max-width: 60ch; }
 

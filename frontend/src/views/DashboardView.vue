@@ -210,7 +210,7 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
 
 .feed-main { flex: 1; min-width: 0; }
 .feed-title { font-weight: 600; color: var(--c-text); }
-.feed-title:hover { color: var(--c-primary); }
+.feed-title:hover { color: var(--c-primary-text); }
 .feed-hash { flex-shrink: 0; }
 
 @media (max-width: 900px) {

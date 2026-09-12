@@ -74,7 +74,7 @@ const summary = computed(() => {
   transition: border-color var(--ease);
 }
 .card:hover { border-color: var(--c-border-strong); text-decoration: none; }
-.card:hover .name { color: var(--c-primary); }
+.card:hover .name { color: var(--c-primary-text); }
 
 .head {
   display: flex;

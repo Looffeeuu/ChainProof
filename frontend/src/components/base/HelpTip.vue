@@ -95,7 +95,7 @@ onBeforeUnmount(detach)
   font-weight: 700;
   line-height: 1;
 }
-.dot:hover { color: var(--c-primary); border-color: var(--c-primary); }
+.dot:hover { color: var(--c-primary-text); border-color: var(--c-primary); }
 
 .pop {
   position: absolute;

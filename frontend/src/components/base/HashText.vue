@@ -92,5 +92,5 @@ onBeforeUnmount(() => clearTimeout(timer))
   font-size: 12px;
   transition: color var(--ease), border-color var(--ease);
 }
-.copy:hover { color: var(--c-primary); border-color: var(--c-border-strong); }
+.copy:hover { color: var(--c-primary-text); border-color: var(--c-border-strong); }
 </style>

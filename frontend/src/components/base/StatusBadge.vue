@@ -58,7 +58,7 @@ const view = computed(
 .tone--verified { color: var(--c-verified); background: var(--c-verified-bg); }
 .tone--pending { color: var(--c-pending); background: var(--c-pending-bg); }
 .tone--rejected { color: var(--c-rejected); background: var(--c-rejected-bg); }
-.tone--neutral { color: var(--c-primary); background: var(--c-primary-weak); }
+.tone--neutral { color: var(--c-primary-text); background: var(--c-primary-weak); }
 
 /* 未知取值：中性灰 + 原样显示字符串，一眼能看出是「没见过的值」而不是某种正常状态 */
 .tone--unknown {
