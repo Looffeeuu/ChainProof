@@ -202,11 +202,14 @@ await check('验证不存在的证书返回 NOT_FOUND 而不是抛错', async ()
   assert(r.verificationStatus === 'NOT_FOUND', `返回了 ${r.verificationStatus}`)
 })
 
-await check('验证存在的证书返回 VALID，并带上 txId', async () => {
+// 命中时是个信封，证书本体在 certificate 里（docs/API.md §5）。
+// 拆信封的是 api/certificates.js，这里量的是假接口有没有照那个形状回
+await check('验证存在的证书回一个信封，本体在 certificate 里', async () => {
   const r = await api.verifyCertificate('CERT-P001-ALICE')
-  assert(r.verificationStatus === 'VALID', `返回了 ${r.verificationStatus}`)
-  assert(/^[0-9a-f]{64}$/.test(r.txId), '没带 txId，验证页就没有链上依据可显示')
-  return `${r.verificationStatus} · ${r.txId.slice(0, 16)}…`
+  assert(r.verificationStatus === 'VALID', `外层 verificationStatus 是 ${r.verificationStatus}`)
+  assert(r.certificate && typeof r.certificate === 'object', '没有 certificate 这一层')
+  assert(/^[0-9a-f]{64}$/.test(r.certificate.txId), '没带 txId，验证页就没有链上依据可显示')
+  return `${r.verificationStatus} · ${r.certificate.txId.slice(0, 16)}…`
 })
 
 // C 线规则（spec/03 §6）：带了 X-Member-Id 只返回这个人参与的项目，

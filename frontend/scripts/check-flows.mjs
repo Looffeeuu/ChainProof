@@ -389,6 +389,37 @@ async function 文件核对对不上(page) {
   assert('两个哈希都摆出来供人自己看', r.hashes === 2, `${r.hashes} 个`)
 }
 
+/**
+ * 公开验证页把六项事实都摆出来了，不是一排「—」。
+ *
+ * **这条守的是拆信封那一步。** `docs/API.md §5` 规定命中时返回
+ * `{ certificateId, verificationStatus, certificate: {…} }`，
+ * 而视图读的是扁平的字段。`api/certificates.js` 少拆一层的话，
+ * 页面**不会报错也不会白屏**——它会挂着绿色的「证书有效」徽章、
+ * 说「这份证书与存证记录一致」，而下面六项里五项显示「—」。
+ * 对一个给项目外的人看的页面，这比白屏更糟：它在说一句自己拿不出依据的话。
+ */
+async function 验证页摆得出事实(page) {
+  await goAs(page, 'alice', '/verify/CERT-P001-ALICE', '.facts')
+  await page.evaluate(HELPERS)
+
+  const r = JSON.parse(await page.evaluate(`JSON.stringify({
+    verdict: $text('.verdict'),
+    facts: $$('.facts > div').map((d) => d.innerText.split(String.fromCharCode(10)).join('=')),
+    hasTx: Boolean(document.querySelector('.facts .wide'))
+  })`))
+
+  const empty = r.facts.filter((f) => f.endsWith('=—'))
+
+  assert(
+    '结论是「与存证记录一致」',
+    String(r.verdict).includes('与存证记录一致'),
+    String(r.verdict).split(String.fromCharCode(10))[0]
+  )
+  assert('六项事实一项都不缺', empty.length === 0, empty.length ? `空的：${empty.join(' / ')}` : r.facts.join(' / '))
+  assert('链上交易那一行在', r.hasTx === true, `wide=${r.hasTx}`)
+}
+
 // ——————————————————————————————————————————————————————————
 
 const SCENARIOS = [
@@ -400,7 +431,8 @@ const SCENARIOS = [
   ['确认之后有明确反馈', 确认之后有明确反馈],
   ['换身份与刷新', 换身份与刷新],
   ['复制失败要说话', 复制失败要说话],
-  ['文件核对对不上', 文件核对对不上]
+  ['文件核对对不上', 文件核对对不上],
+  ['验证页摆得出事实', 验证页摆得出事实]
 ]
 
 async function main() {

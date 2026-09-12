@@ -45,6 +45,9 @@ const oneOf = (...values) => (v) => values.includes(v)
 /** `describe` 只用于失败时说人话，判据本身在 test 里 */
 const rule = (describe, test) => ({ describe, test })
 
+/** 可选字段：给了就得对，不给不算问题 */
+const opt = (spec) => ({ ...spec, optional: true })
+
 const R = {
   str: rule('字符串', str),
   hex64: rule('64 位小写十六进制', hex64),
@@ -107,6 +110,9 @@ const SCHEMA = {
     txId: R.hex64
   },
   Contributions: {
+    // docs/API.md 的示例里带了它，前端不读，但契约里有就登记上，
+    // 免得「多了字段 projectId」每次都报一遍
+    projectId: opt(R.str),
     members: { each: 'Share' },
     basedOnMilestones: R.int
   },
@@ -118,6 +124,15 @@ const SCHEMA = {
   NotFound: {
     certificateId: R.str,
     verificationStatus: R.certStatus
+  },
+  /**
+   * 公开验证命中时的信封（docs/API.md §5）：证书本体在 `certificate` 里。
+   * 拆信封在 `api/certificates.js`，视图看到的是扁平的 Certificate。
+   */
+  VerifyEnvelope: {
+    certificateId: R.str,
+    verificationStatus: R.certStatus,
+    certificate: { one: 'Certificate' }
   }
 }
 
@@ -137,7 +152,11 @@ function validate(value, typeName, where, problems = []) {
   for (const [key, spec] of Object.entries(shape)) {
     const got = value[key]
     if (got === undefined) {
-      problems.push(`${where} 少字段 ${key}`)
+      if (!spec.optional) problems.push(`${where} 少字段 ${key}`)
+      continue
+    }
+    if (spec.one) {
+      validate(got, spec.one, `${where}.${key}`, problems)
       continue
     }
     if (spec.each) {
@@ -259,7 +278,12 @@ async function main() {
   if (certificates.length) {
     const id = certificates[0].certificateId
     report('GET /certificates/:id 是 Certificate', validate(await CALLS.getCertificate(id), 'Certificate', id))
-    report('GET /verify/:id 命中时返回完整 Certificate', validate(await CALLS.verifyCertificate(id), 'Certificate', id))
+    // 命中时是信封，不是裸的 Certificate——这一处两边曾经各填各的，
+    // 前端按扁平实现、docs/API.md 写的是嵌套。判据以 docs/API.md 为准
+    report(
+      'GET /verify/:id 命中时返回信封，本体在 certificate 里',
+      validate(await CALLS.verifyCertificate(id), 'VerifyEnvelope', id)
+    )
   }
 
   // 查不到是 200 + NOT_FOUND，不是 404、不是抛错（spec/03 §9）。

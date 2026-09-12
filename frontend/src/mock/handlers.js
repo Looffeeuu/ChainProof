@@ -247,15 +247,26 @@ export async function createCertificate(projectId, { memberId } = {}) {
 }
 
 /**
- * 公开验证（spec/03 §9）。
+ * 公开验证。
  *
  * 查不到**不抛错**，返回 200 + `verificationStatus: 'NOT_FOUND'`——
  * 「查无此证」是一次有效的验证结果，不是接口错误。
  * 查得到时这个字段是 `VALID`，注意它和 Milestone.status 的 `VERIFIED` 不是一回事。
+ *
+ * **命中时返回的是一个信封，证书本体在 `certificate` 里**，照
+ * `docs/API.md §5` 的形状。这一处两边曾经各填各的：`spec/03` 只规定了
+ * 查不到的情况，从没说过命中时长什么样，于是前端按扁平实现、
+ * `docs/API.md` 写的是嵌套。以 `docs/API.md` 为准（它是唯一写明的一方），
+ * 假接口跟着它——这样演示走的和联调走的是同一条代码路径。
+ * 拆信封在 `api/certificates.js`，视图只看得到扁平的 Certificate。
  */
 export async function verifyCertificate(certificateId) {
   await delay()
   const found = db.certificates.find((c) => c.certificateId === certificateId)
   if (!found) return { certificateId, verificationStatus: 'NOT_FOUND' }
-  return clone(found)
+  return {
+    certificateId,
+    verificationStatus: found.verificationStatus,
+    certificate: clone(found)
+  }
 }

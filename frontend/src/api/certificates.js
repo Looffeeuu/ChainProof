@@ -38,6 +38,31 @@ export const createCertificate = (projectId, payload) =>
     ? mock.createCertificate(projectId, payload)
     : post(`/projects/${projectId}/certificates`, payload)
 
+/**
+ * 拆掉公开验证响应的信封，让视图只看到一个扁平的 Certificate。
+ *
+ * `docs/API.md §5` 规定命中时返回
+ * `{ certificateId, verificationStatus, certificate: {…} }`，查不到时只有前两项。
+ * 视图要读的是 `memberId`、`contributionPercentage`、`milestoneIds` 这些，
+ * 不拆的话它们全是 undefined——页面不会报错，只会挂着「证书有效」的绿徽章
+ * 说「与存证记录一致」，而下面六项事实里五项显示「—」。
+ * **对一个给项目外的人看的页面，这比白屏更糟。**
+ *
+ * 两种形状都收：万一哪一版真接口直接回扁平的，这里也不会坏。
+ * 外层的 `verificationStatus` 优先——查不到时只有外层有。
+ */
+function unwrapVerify(res) {
+  const inner = res?.certificate
+  if (!inner || typeof inner !== 'object') return res
+  return {
+    ...inner,
+    certificateId: res.certificateId ?? inner.certificateId,
+    verificationStatus: res.verificationStatus ?? inner.verificationStatus
+  }
+}
+
 /** 公开验证：ID 不存在时返回 verificationStatus: 'NOT_FOUND'，不抛错（spec/03 §9） */
-export const verifyCertificate = (certificateId) =>
-  useMock ? mock.verifyCertificate(certificateId) : get(`/verify/${certificateId}`)
+export const verifyCertificate = async (certificateId) =>
+  unwrapVerify(
+    useMock ? await mock.verifyCertificate(certificateId) : await get(`/verify/${certificateId}`)
+  )
