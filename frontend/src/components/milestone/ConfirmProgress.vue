@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { asObjectList } from '../../utils/list.js'
 import { session } from '../../stores/session.js'
 
 /**
@@ -11,8 +12,7 @@ import { session } from '../../stores/session.js'
  * 被拒绝的情况不显示分数，显示是**谁**拒绝的：分数会让人以为还在等其他人，
  * 而实际上流程已经停了。
  *
- * 点名而不是「1 人拒绝」：拒绝的人是谁，是这条记录上最要紧的一个事实，
- * 而它本来就在 confirmations 里，只是原先没显示出来。
+ * 点名而不是「1 人拒绝」：拒绝的人是谁，是这条记录上最要紧的一个事实。
  * 当事人自己看到的是「你拒绝了」——同一句话对当事人和旁观者不该一样
  * （视角化的理由见 AwaitingYou.vue 的注释）。
  */
@@ -20,14 +20,14 @@ const props = defineProps({
   milestone: { type: Object, required: true }
 })
 
-const total = computed(() => props.milestone.contributors?.length ?? 0)
+const total = computed(() => asObjectList(props.milestone.contributors).length)
 
 const confirmed = computed(
-  () => (props.milestone.confirmations ?? []).filter((c) => c.decision === 'CONFIRMED').length
+  () => asObjectList(props.milestone.confirmations).filter((c) => c.decision === 'CONFIRMED').length
 )
 
 const rejecters = computed(
-  () => (props.milestone.confirmations ?? []).filter((c) => c.decision === 'REJECTED')
+  () => asObjectList(props.milestone.confirmations).filter((c) => c.decision === 'REJECTED')
 )
 
 const text = computed(() => {

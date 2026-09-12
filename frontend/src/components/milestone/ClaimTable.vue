@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { asObjectList } from '../../utils/list.js'
 import MemberAvatars from '../project/MemberAvatars.vue'
 import StatusBadge from '../base/StatusBadge.vue'
 import { formatDateTime } from '../../utils/format-time.js'
@@ -17,10 +18,10 @@ const props = defineProps({
 })
 
 const decisionOf = (memberId) =>
-  (props.milestone.confirmations ?? []).find((c) => c.memberId === memberId)
+  asObjectList(props.milestone.confirmations).find((c) => c.memberId === memberId)
 
 const rows = computed(() =>
-  (props.milestone.contributors ?? []).map((c) => ({
+  asObjectList(props.milestone.contributors).map((c) => ({
     ...c,
     decision: decisionOf(c.memberId)
   }))

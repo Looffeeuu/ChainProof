@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { formatDate } from '../../utils/format-time.js'
+import { asObjectList } from '../../utils/list.js'
 
 /**
  * 累计比例的明细：每条已验证的里程碑各人占多少。
@@ -17,16 +18,17 @@ const props = defineProps({
 })
 
 const verified = computed(() =>
-  props.milestones
+  asObjectList(props.milestones)
     .filter((m) => m.status === 'VERIFIED')
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    // createdAt 可能缺，String() 兜一下，不让排序把整页带崩
+    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
 )
 
 /** 表头就是累计比例里出现过的那几个人，顺序保持一致，两张表才对得上 */
-const columns = computed(() => props.members.map((m) => m.memberId))
+const columns = computed(() => asObjectList(props.members).map((m) => m.memberId))
 
 function shareOf(milestone, memberId) {
-  return milestone.contributors.find((c) => c.memberId === memberId)?.percentage ?? null
+  return asObjectList(milestone.contributors).find((c) => c.memberId === memberId)?.percentage ?? null
 }
 
 /** 每个人在所有已验证里程碑上的原始比例之和。累计比例是它归一化之后的结果 */

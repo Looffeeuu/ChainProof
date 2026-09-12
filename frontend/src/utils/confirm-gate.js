@@ -1,5 +1,7 @@
+import { asObjectList } from './list.js'
+
 /**
- * 「这个人现在能不能对这条里程碑表态」。纯函数，不 import 本项目任何模块。
+ * 「这个人现在能不能对这条里程碑表态」。纯函数，只依赖同为纯函数的 list.js。
  *
  * 抽出来是为了能测：四条互斥规则决定按钮出不出现，写在组件里只能靠切身份手点。
  * 返回**原因码**而不是句子——句子要带时间，格式化属于展示层。
@@ -13,8 +15,10 @@ export function confirmGate(milestone, memberId) {
   const base = { can: false, reason: 'NO_DATA', share: null, decidedAt: null }
   if (!milestone) return base
 
-  const contributor = (milestone.contributors ?? []).find((c) => c.memberId === memberId)
-  const decision = (milestone.confirmations ?? []).find((c) => c.memberId === memberId)
+  // asObjectList 而不是 `?? []`：这两个字段来自接口，可能是 null，
+  // 也可能根本不是数组（scripts/check-malformed.mjs 守着这条）
+  const contributor = asObjectList(milestone.contributors).find((c) => c.memberId === memberId)
+  const decision = asObjectList(milestone.confirmations).find((c) => c.memberId === memberId)
 
   const share = contributor ? contributor.percentage : null
   const decidedAt = decision ? decision.timestamp : null

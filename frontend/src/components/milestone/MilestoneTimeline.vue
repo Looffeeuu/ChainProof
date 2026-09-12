@@ -3,7 +3,9 @@ import StatusBadge from '../base/StatusBadge.vue'
 import HashText from '../base/HashText.vue'
 import ConfirmProgress from './ConfirmProgress.vue'
 import AwaitingYou from './AwaitingYou.vue'
+import { computed } from 'vue'
 import { formatDateTime } from '../../utils/format-time.js'
+import { asObjectList } from '../../utils/list.js'
 
 /**
  * 里程碑时间线。spec/01 §2.7 把它列为重点页面：
@@ -13,9 +15,12 @@ import { formatDateTime } from '../../utils/format-time.js'
  * 「时间线怎么排」是这个组件的职责，换成正序也只改这一处。
  * 接口给的是正序（spec/02 §5.1），所以这里要翻过来。
  */
-defineProps({
+const props = defineProps({
   milestones: { type: Array, default: () => [] }
 })
+
+// 倒序 + 滤掉不是对象的元素。列表里混进一个 null，模板里那句 m.status 就抛
+const rows = computed(() => [...asObjectList(props.milestones)].reverse())
 
 /** 圆点的颜色跟着状态走，和徽章用同一套语义色 */
 const TONE = {
@@ -28,7 +33,7 @@ const TONE = {
 <template>
   <ol class="timeline">
     <li
-      v-for="m in [...milestones].reverse()"
+      v-for="m in rows"
       :key="m.milestoneId"
       class="item"
       :class="`tone--${TONE[m.status] ?? 'unknown'}`"

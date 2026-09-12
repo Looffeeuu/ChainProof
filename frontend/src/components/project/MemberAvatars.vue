@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { memberTone } from '../../utils/member-tone.js'
+import { asList } from '../../utils/list.js'
 
 /**
  * 成员头像组。没有真实头像，用成员 ID 的首字母加一个稳定的底色。
@@ -19,14 +20,17 @@ const props = defineProps({
   size: { type: Number, default: 24 }
 })
 
-const shown = computed(() => props.members.slice(0, props.max))
-const overflow = computed(() => Math.max(0, props.members.length - props.max))
+// 一律过 asList：`default: () => []` 只在属性是 undefined 时生效，
+// 接口回一个 null 就挡不住了
+const list = computed(() => asList(props.members))
+const shown = computed(() => list.value.slice(0, props.max))
+const overflow = computed(() => Math.max(0, list.value.length - props.max))
 
 const initialOf = (id) => String(id).slice(0, 1).toUpperCase()
 </script>
 
 <template>
-  <span class="avatars" :title="members.join('、')">
+  <span class="avatars" :title="list.join('、')">
     <span
       v-for="m in shown"
       :key="m"
@@ -38,7 +42,7 @@ const initialOf = (id) => String(id).slice(0, 1).toUpperCase()
     <span v-if="overflow" class="avatar tone--rest" :style="{ width: `${size}px`, height: `${size}px` }" aria-hidden="true">
       +{{ overflow }}
     </span>
-    <span class="sr-only">成员：{{ members.join('、') || '暂无' }}</span>
+    <span class="sr-only">成员：{{ list.join('、') || '暂无' }}</span>
   </span>
 </template>
 
@@ -62,7 +66,6 @@ const initialOf = (id) => String(id).slice(0, 1).toUpperCase()
 .tone--2 { background: var(--c-member-2-weak); color: var(--c-member-2); }
 .tone--3 { background: var(--c-member-3-weak); color: var(--c-member-3); }
 .tone--4 { background: var(--c-member-4-weak); color: var(--c-member-4); }
-/* var(--fs-label) = 12px 是排版档位里的最小一档（spec/01 §2.3）。
-   这里原来写的是 11px，属于没有理由的失误——11px 的中文在投影仪上读不出来 */
+/* --fs-label = 12px 是排版档位里的最小一档（spec/01 §2.3），不要再往下调 */
 .tone--rest { background: var(--c-sunken); color: var(--c-text-soft); font-size: var(--fs-label); }
 </style>
