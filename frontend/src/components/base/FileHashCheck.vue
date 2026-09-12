@@ -91,8 +91,6 @@ function onDrop(event) {
       @drop.prevent="onDrop"
     >
       <input type="file" class="sr-only" @change="onPick" />
-      <!-- 原先这里是一个 32px 的 ◇ 字符。字符图标在不同系统上字形差别很大，
-           也和界面里其余全部用 SVG 画的图标不是一套东西 -->
       <span class="drop-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">

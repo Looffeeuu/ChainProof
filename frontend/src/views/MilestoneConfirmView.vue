@@ -149,9 +149,8 @@ async function decide(decision) {
       @retry="run(route.params.id)"
     >
       <PageHeader :title="milestone.title" :description="milestone.description">
-        <!-- 面包屑占眉标的位置。原先眉标写「贡献确认」，上面另有一条面包屑
-             结尾也是「贡献确认」，同一处上下两行说同一件事；
-             而且那条面包屑写在 AsyncSection 外面，加载中和出错时也照挂 -->
+        <!-- 面包屑占眉标的位置，而且必须写在 AsyncSection **里面**：
+             写在外面的话，加载中和出错时页面顶上也照挂一条 -->
         <template #breadcrumb>
           <nav class="crumbs t-small t-soft" aria-label="面包屑">
             <RouterLink to="/projects">项目</RouterLink>
@@ -196,8 +195,8 @@ async function decide(decision) {
           </HelpTip>
         </p>
 
-        <!-- 这句话以前只是一句话，没有配套的工具，读者要么信要么自己装命令行。
-             现在它是一个可以当场做的动作，而且文件不出浏览器。 -->
+        <!-- 上面那句「核对一下」要配一个能当场做的动作，否则读者要么信、
+             要么自己去装命令行。核对全在浏览器里，文件不出本机。 -->
         <FileHashCheck
           v-if="milestone.fileHash"
           :expected="milestone.fileHash"

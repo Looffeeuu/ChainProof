@@ -82,8 +82,7 @@ onBeforeUnmount(detach)
   border-radius: 999px;
   background: transparent;
   color: var(--c-text-soft);
-  /* 原来是 11px——排版档位之外、也没登记过的失误（spec/01 §2.3）。
-     11px 的中文在投影仪上读不出来 */
+  /* 档位里最小的一档（spec/01 §2.3）。再小的中文在投影仪上读不出来 */
   font-size: var(--fs-label);
   font-weight: 700;
   line-height: 1;

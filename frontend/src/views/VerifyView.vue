@@ -36,10 +36,9 @@ watch(() => route.params.id, (id) => {
 /**
  * 空输入的错误说明。
  *
- * 原先是 `if (!id) return`，静默返回、输入框也没有 required——
- * 用户点了「验证」，屏幕上什么都没发生。这一页的读者是**项目外的人**，
- * 是这个产品对外的第一印象，他的第一反应会是「这个网站坏了」，
- * 而不是「我忘了填」。
+ * 空输入不能静默 return。这一页的读者是**项目外的人**，是这个产品对外的
+ * 第一印象——点了「验证」屏幕上什么都不发生的话，他的第一反应是
+ * 「这个网站坏了」，而不是「我忘了填」。
  */
 const inputError = ref('')
 
@@ -126,7 +125,7 @@ const verdict = computed(() => {
       <p class="verdict">
         <template v-if="verdict === 'verified'">这份证书与存证记录一致。</template>
         <!-- 说「有效」不说「已验证」：证书的状态取值是 VALID，界面别处叫「证书有效」；
-             「已验证」是里程碑的 VERIFIED。两个词同形不同义，这里原先写错了 -->
+             「已验证」是里程碑的 VERIFIED。两个词同形不同义，别写混 -->
         <template v-else>查到了这份证书，但它现在不是有效状态。</template>
         <StatusBadge :status="result.verificationStatus" />
       </p>
@@ -216,9 +215,9 @@ const verdict = computed(() => {
    一条通栏的颜色比一个小徽章更早被看到，远远地就分得出是哪种结果。
    颜色不是唯一手段——同一张卡里始终有文字结论与状态徽章（WCAG SC 1.4.1）。
 
-   原先这条带子是 `position: absolute` 的伪元素，靠卡片的 `overflow: hidden`
-   切掉两端的直角。那个 `overflow: hidden` 把卡片里「查看证书原件」按钮和
-   复制按钮的键盘焦点框一起裁掉了，所以换成了 border-top（见 BaseCard.accent）。 */
+   带子由 border-top 画（见 BaseCard.accent），**不要**改回
+   `position: absolute` 的伪元素 + `overflow: hidden`：那个 overflow 会把卡片里
+   「查看证书原件」按钮和复制按钮的键盘焦点框一起裁掉。 */
 .result { display: grid; gap: var(--sp-3); }
 
 .facts {

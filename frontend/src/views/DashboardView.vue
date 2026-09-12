@@ -15,10 +15,9 @@ import { formatRelative, formatDate } from '../utils/format-time.js'
 /**
  * 概览页。spec/01 §2.7：项目数、已验证里程碑数、证书数、最近活动。
  *
- * 取数与汇总都在 api/queries.js 的 overview() 里，这一页只负责排版。
- * 原先那三十行「先取项目、再按项目取里程碑、然后 flat + sort + map」
- * 和项目列表页里的是同一段逻辑，抄了两遍；而且它绕过了 stores/projects.js
- * 的缓存，导致打开这一页会和侧栏各打一次 /api/projects。
+ * 取数与汇总都在 api/queries.js 的 overview() 里，这一页只负责排版——
+ * 「先取项目、再按项目取里程碑、然后 flat + sort + map」和项目列表页是
+ * 同一段逻辑，写在页面里就会抄两遍，还会绕过 stores/projects.js 的缓存。
  */
 const { data, loading, error, run } = useAsync(overview)
 onMounted(run)
@@ -26,13 +25,10 @@ onMounted(run)
 /**
  * 三张统计卡。
  *
- * 每张除了数字还带**一句上下文**，这是原先没有的：光一个孤零零的 `3`
- * 说明不了任何事——3 个项目是多是少？3 条已验证是全部还是零头？
- * 一句「共 4 条里程碑」「占全部 4 条的 75%」让同一个数字变成可读的判断。
- *
- * 版式上它也解决了另一个问题：原来每张卡 150px 高、只放一个 40px 的数字
- * 和一个 13px 的词，右边三分之二是空的。加上图标块与上下文行之后，
- * 卡片的内容终于填满了它自己的面积。
+ * 每张除了数字还要带**一句上下文**：光一个孤零零的 `3` 说明不了任何事——
+ * 3 个项目是多是少？3 条已验证是全部还是零头？一句「共 4 条里程碑」
+ * 「占全部 4 条的 75%」让同一个数字变成可读的判断。
+ * 顺带也把卡片填满了：只放一个数字和一个词的话，右边三分之二是空的。
  */
 const stats = computed(() => {
   const d = data.value
@@ -85,9 +81,8 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
 
 <template>
   <div>
-    <!-- 不写 description。原先那句「团队当前的存证进度、最近提交的里程碑，
-         以及已经签发的贡献证明」是把这一页有什么再念一遍——
-         下面三张统计卡和两个区块标题已经说了同样的事（spec/01 §2.10 规则 6）。 -->
+    <!-- 不写 description：下面三张统计卡和两个区块标题已经说清这一页有什么，
+         再用一句话复述一遍是目录式复述（spec/01 §2.10 规则 6）。 -->
     <PageHeader title="概览">
       <template #actions>
         <BaseButton :variant="isEmpty ? 'secondary' : 'primary'" @click="$router.push('/projects/new')">
@@ -188,8 +183,8 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
         </ul>
       </BaseCard>
 
-      <!-- 证书的唯一入口。以前这个入口写死在侧栏里指向一条假数据，
-           接真接口就会 404；改成按列表渲染，有几张显示几张。
+      <!-- 证书的唯一入口，按列表渲染、有几张显示几张，**不要写死某个编号**
+           （那种入口一接真接口就是 404）。
            spec/01 §2.6 把「证书列表为空」列为必做的空状态之一，就是这里。 -->
       <BaseCard padding="none" class="block">
         <template #title><h2>我的贡献证明</h2></template>

@@ -26,9 +26,8 @@ const isEmpty = computed(() => data.value?.length === 0)
 
 <template>
   <div>
-    <!-- 原先这里 eyebrow 和 title 都写着「项目」，同一个词上下叠两遍。
-         眉标的用处是交代上一层的位置，和标题重复时它没有信息，直接去掉 -->
-    <!-- 不写 description，理由同概览页：卡片上已经有进度条、摘要与计数，
+    <!-- 不写 eyebrow：眉标的用处是交代上一层的位置，和标题重复时它没有信息。
+         也不写 description，理由同概览页——卡片上已经有进度条、摘要与计数，
          再用一句话复述一遍流程，读者不会因此多知道任何事 -->
     <PageHeader title="项目">
       <template #actions>

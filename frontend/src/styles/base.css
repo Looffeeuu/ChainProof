@@ -104,7 +104,7 @@ table { border-collapse: collapse; width: 100%; }
    它们要出现在十几个组件里，每个组件抄一份就会出现十几种字号。 */
 
 /* 导语：比正文大一档。用在页面主标题下面那一句、卡片里的关键结论。
-   原先没有这一档，于是 34px 的标题下面直接接 15px 的正文，中间是断的。 */
+   没有这一档的话，34px 的标题下面直接接 15px 的正文，中间是断的。 */
 .t-lead { font-size: var(--fs-lead); line-height: 1.5; color: var(--c-text-soft); }
 
 .t-small { font-size: var(--fs-small); }

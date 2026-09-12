@@ -150,9 +150,8 @@ async function issueCertificate() {
       </template>
 
       <PageHeader :title="project.name" :description="project.description || ''">
-        <!-- 面包屑走 PageHeader 的插槽，占的是眉标的位置。
-             原先它单独写在 AsyncSection 外面，于是加载中和出错时页面顶上
-             也挂着一条「项目 / undefined」 -->
+        <!-- 面包屑走 PageHeader 的插槽，占的是眉标的位置。必须写在
+             AsyncSection **里面**，否则加载中和出错时顶上会挂一条「项目 / undefined」 -->
         <template #breadcrumb>
           <nav class="crumbs t-small t-soft" aria-label="面包屑">
             <RouterLink to="/projects">项目</RouterLink>
@@ -161,8 +160,8 @@ async function issueCertificate() {
           </nav>
         </template>
 
-        <!-- 元信息原先是页头下面一个用负 margin 往上拽的独立段落。
-             负 margin 的值和 PageHeader 内部的间距耦合，那边一改这里就错位 -->
+        <!-- 元信息走插槽，不要在页头下面另写一段用负 margin 往上拽：
+             那个值和 PageHeader 内部的间距耦合，那边一改这里就错位 -->
         <template #meta>
           <StatusBadge :status="project.status" />
           <span class="t-nums">创建于 {{ formatDate(project.createdAt) }}</span>
@@ -232,10 +231,9 @@ async function issueCertificate() {
           </div>
         </BaseCard>
 
-        <!-- 右列原先放的是「项目描述」。描述通常只有两三行，而左边那张卡很高，
-             两列等高的网格把它拉成一个四百多像素的空盒子——整页最刺眼的一块空白。
-             描述现在进了页头导语，这里换成按状态分组的里程碑计数：
-             内容是随项目变化的，高度也和左列相称。 -->
+        <!-- 右列放按状态分组的里程碑计数：内容随项目变化，高度和左列相称。
+             不要在这里放项目描述——描述只有两三行，会被两列网格拉成
+             一个四百多像素的空盒子，描述本身在页头导语里。 -->
         <BaseCard class="col side">
           <template #title><h2>存证概况</h2></template>
 

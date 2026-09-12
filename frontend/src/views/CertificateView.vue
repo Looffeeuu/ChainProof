@@ -26,10 +26,13 @@ const route = useRoute()
 /**
  * 证书本体，外加一个只用来显示项目名的附带请求。
  *
- * **项目名取不到不算失败。** 原先是串行 await，任何一个失败都让整页显示
- * 「没能打开这份证书」——包括证书本身明明已经拿到、只是项目查不到的情况。
- * `CertificateSheet` 早就有 `projectName || certificate.projectId` 的兜底，
- * 那条兜底之前永远跑不到。确认页的面包屑用的是同一种处理。
+ * **项目名取不到不算失败**，所以第二个请求单独 catch。两个 await 串起来
+ * 不加 catch 的话，项目查不到会让整页显示「没能打开这份证书」——
+ * 而证书本身明明已经拿到，`CertificateSheet` 里那句
+ * `projectName || certificate.projectId` 的兜底也就永远跑不到。
+ * 确认页的面包屑用的是同一种处理。
+ *
+ * 两个请求并发不了：`getProject` 要的 projectId 来自证书本身。
  */
 async function load(certificateId) {
   const certificate = await getCertificate(certificateId)
@@ -46,11 +49,10 @@ watch(() => route.params.id, (id) => id && run(id), { immediate: true })
 /**
  * 公开验证页的完整地址，印在证书上供人自己核验。
  *
- * **优先取构建期配置的公开域名。** 原先只取 `window.location.origin`，
- * 于是本地或局域网演示时，证书上印出来的是
- * `http://localhost:4173/verify/...` 或 `http://192.168.x.x/verify/...`。
- * 这张纸是要交给项目外的人的——「公开验证」是这个产品的核心主张，
- * 而拿到纸的人打不开那个地址；打印成 PDF 之后它还会固化在文件里。
+ * **优先取构建期配置的公开域名，不要只取 `window.location.origin`。**
+ * 那样本地或局域网演示时，证书上印出来的是 `http://localhost:4173/verify/...`，
+ * 而这张纸是要交给项目外的人的——他打不开那个地址，
+ * 打印成 PDF 之后它还会固化在文件里。
  *
  * `typeof window` 的判断是为了服务端渲染——那边没有 window，直接读会抛错。
  */
@@ -126,8 +128,7 @@ function print() {
             title="没有这份证书"
             description="编号可能拼错，或这份证书不存在。"
           >
-            <!-- 空状态里必须给一条出路。项目详情页同样的位置有「回到项目列表」，
-                 这里原先只有一句说明，人读完就卡住了 -->
+            <!-- 空状态里必须给一条出路，只写一句说明的话人读完就卡住了 -->
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/')">回到概览</BaseButton>
             </template>

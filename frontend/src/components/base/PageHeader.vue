@@ -4,10 +4,9 @@
  * 九个页面都有这一块，抄九遍就会出现九种上下间距，所以抽成组件。
  * 它不认识任何业务字段，数据全部由 props 进、插槽出，因此归 components/base/。
  *
- * description 走 `.t-lead`（17px）而不是 `.t-small`（13px）。
- * 原先标题 40px、说明 13px，中间隔着三档，页面从一个巨大的标题
- * 直接掉进最小号的灰字里——读者的视线没有落脚点。导语这一档就是为了接住它
- * （spec/01 §2.3 新增的 lead 级）。
+ * description 走 `.t-lead`（17px）而不是 `.t-small`（13px）：
+ * 主标题与正文之间隔着三档，中间没有东西接的话，读者的视线没有落脚点
+ * （spec/01 §2.3 的 lead 级就是为此存在的）。
  */
 defineProps({
   eyebrow: { type: String, default: '' },

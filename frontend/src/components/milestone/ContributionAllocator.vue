@@ -61,9 +61,9 @@ function setPercentage(memberId, raw) {
 /**
  * 给读屏用的播报，**拖完再说**。
  *
- * 原先 aria-live 挂在可见的总和上，而拖动 range 每一帧都触发 input，
+ * 不能把 aria-live 挂在可见的总和那一行上：拖动 range 每一帧都触发 input，
  * 读屏会被「已分配 37%…38%…39%」淹没。这里等操作停下 500ms 再播一次结论，
- * 可见的那一行则照常实时更新——两者的读者不同，节奏也该不同。
+ * 可见的那一行照常实时更新——两者的读者不同，节奏也该不同。
  */
 const announced = ref('')
 let announceTimer = null
@@ -158,8 +158,8 @@ function giveRemainderTo(memberId) {
           <span class="t-small t-soft">%</span>
         </span>
 
-        <!-- 原来这里只显示「+8」，含义全靠 title——触屏没有悬停，读屏念出来是「加八」。
-             按钮上必须有说得通的文字 -->
+        <!-- 按钮上要有说得通的文字。光一个「+8」的话，触屏没有悬停看不到 title，
+             读屏念出来就是「加八」 -->
         <button
           type="button"
           class="t-small link fill"
@@ -211,12 +211,10 @@ function giveRemainderTo(memberId) {
   background: var(--c-sunken);
   box-shadow: inset 0 0 0 1px var(--c-border-subtle);
 }
-/* 分段用**人物色**，不是状态色。
-   原先是按 nth-child 取 --c-primary / --c-verified / --c-pending / --c-rejected，
-   于是同一个界面里绿色既是「链上已验证」又是「第二位成员」，
-   红色段会让人把某位成员读成「被拒绝」；而且按下标取色，
-   同一个 bob 在这里是绿的、在项目详情的比例条里是品红——
-   「同一个人在任何位置都是同一个颜色」正是 utils/member-tone.js 存在的全部理由。 */
+/* 分段用**人物色**，不是状态色：借了状态色，绿色就同时是「链上已验证」
+   和「第二位成员」，红色段会让人把某位成员读成「被拒绝」。
+   而且必须按 ID 折算（utils/member-tone.js）而不是按下标，
+   否则同一个人换个列表就换个颜色。 */
 /* flex-shrink: 0 是必须的。不写的话 flex 会把超过 100% 的部分按比例压回容器宽度，
    三个人各 60% 画出来仍然是一条不多不少刚好填满的横条——
    「装不下」这个提示从来不会出现。写了它才真的溢出、被 .bar 的 overflow 裁掉 */

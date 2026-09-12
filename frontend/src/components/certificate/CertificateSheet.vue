@@ -92,10 +92,9 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
      从主色过渡到存证色，正好是这张纸讲的两件事——「这是本站签发的」
      与「它在链上有据可查」。
 
-     它是**背景的第一层**，不是绝对定位的元素。背景本来就被 border-radius 裁，
-     所以两端的圆角自动就对；而原先的做法是一个 `position: absolute` 的
-     `<span>` 加上容器的 `overflow: hidden`，那个 `overflow: hidden`
-     连带把纸上两个复制按钮的键盘焦点框一起裁掉了。 */
+     它必须是**背景的第一层**，不能是绝对定位的元素：背景本来就被 border-radius
+     裁，两端的圆角自动就对。换成 `position: absolute` + 容器 `overflow: hidden`
+     的话，那个 `overflow: hidden` 会连带把纸上两个复制按钮的键盘焦点框裁掉。 */
   background:
     linear-gradient(90deg, var(--c-primary), var(--c-chain)) top / 100% 5px no-repeat,
     var(--c-surface);
