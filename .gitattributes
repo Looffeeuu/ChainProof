@@ -1,0 +1,48 @@
+# 换行符规范
+#
+# 为什么需要这个文件：
+#   本仓库同时包含 Windows 上开发、但必须在 Linux / WSL2 里执行的 shell 脚本
+#   （blockchain/network 下的 Fabric 部署脚本）。
+#   若这些文件以 CRLF 检出，Linux 会报
+#     `bash\r: No such file or directory` 或 `bad interpreter: /bin/bash^M`
+#   导致整套部署流程无法运行。
+#
+#   仓库当前 core.autocrlf=true（因机器而异），仅靠本地 git config 无法保证
+#   三位组员 clone 出来的结果一致，因此在仓库内固化规则。
+
+# ---------------------------------------------------------------------------
+# 默认：让 git 自动识别文本文件，入库时统一为 LF
+# ---------------------------------------------------------------------------
+* text=auto eol=lf
+
+# ---------------------------------------------------------------------------
+# 必须在 Linux / WSL2 中执行的文件：强制 LF，任何平台检出都不得变成 CRLF
+# ---------------------------------------------------------------------------
+*.sh   text eol=lf
+*.bash text eol=lf
+*.env  text eol=lf
+
+# Fabric / 链码相关配置与源码
+*.js   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.txt  text eol=lf
+
+# ---------------------------------------------------------------------------
+# 二进制文件：禁止任何换行符转换，否则会损坏文件
+# ---------------------------------------------------------------------------
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.tar  binary
+*.vmdk binary
+
+# 锁文件按文本处理但保持 LF（内容含哈希，换行符被改动会导致校验失败）
+package-lock.json text eol=lf
