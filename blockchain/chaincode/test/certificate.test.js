@@ -81,8 +81,12 @@ describe('ChainProofContract - GetProjectContributions', () => {
     })
   })
 
-  test('多个 VERIFIED 里程碑时取算术平均并四舍五入', async () => {
-    // M004 与 M001 同为 VERIFIED：alice (42+60)/2 = 51，bob (31+20)/2 = 25.5 -> 26
+  test('多个 VERIFIED 里程碑时用最大余数法取整，且整数总和严格等于 100', async () => {
+    // M004 与 M001 同为 VERIFIED：
+    //   alice (42+60)/2 = 51（整）
+    //   bob   (31+20)/2 = 25.5
+    //   charlie (27+20)/2 = 23.5
+    // 浮点和恰为 100，取整后也必须严格等于 100。
     ctx.stub.setTimestamp('2026-09-14T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M004', 'P001', '文档整理', 'd', 'docs.zip', HASH_C,
@@ -101,9 +105,90 @@ describe('ChainProofContract - GetProjectContributions', () => {
 
     const byMember = Object.fromEntries(result.members.map((m) => [m.memberId, m.percentage]))
     expect(byMember.alice).toBe(51)
-    expect(byMember.bob).toBe(26) // 25.5 四舍五入
-    expect(byMember.charlie).toBe(24) // (27+20)/2 = 23.5 -> 24
+    // 向下取整和为 51+25+23 = 99，剩余 1 个名额按余数最大者分配；
+    // bob 与 charlie 余数同为 0.5，按 memberId 升序取 bob（确定性要求）
+    expect(byMember.bob).toBe(26)
+    expect(byMember.charlie).toBe(23)
+
     result.members.forEach((m) => expect(Number.isInteger(m.percentage)).toBe(true))
+    const sum = result.members.reduce((s, m) => s + m.percentage, 0)
+    expect(sum).toBe(100)
+  })
+
+  /**
+   * 回归锁：逐项 Math.round 会让总和溢出到 101。
+   *
+   * 曾实测到的缺陷数据：两个 VERIFIED 里程碑
+   *   M001: alice 40 / bob 35 / charlie 25
+   *   M002: alice 60 / bob 20 / charlie 20
+   * 精确平均为 50 / 27.5 / 22.5，逐项四舍五入得 50+28+23 = 101，
+   * 导致 Dashboard 贡献占比图对不上、答辩出现「贡献总和 101%」。
+   * 若有人把 _roundContributions 改回逐项取整，本测试会失败。
+   */
+  test('两个 .5 同时出现时总和不得溢出到 101', async () => {
+    await contract.CreateProject(ctx, 'P100', 'rounding', 'd', 'alice',
+      JSON.stringify(['alice', 'bob', 'charlie']))
+
+    ctx.stub.setTimestamp('2026-09-15T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M100', 'P100', 'first', 'd', 'a.zip', HASH_A,
+      JSON.stringify([
+        { memberId: 'alice', percentage: 40 },
+        { memberId: 'bob', percentage: 35 },
+        { memberId: 'charlie', percentage: 25 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M100', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M100', 'bob', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M100', 'charlie', 'CONFIRMED')
+
+    ctx.stub.setTimestamp('2026-09-16T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M101', 'P100', 'second', 'd', 'b.zip', HASH_B,
+      JSON.stringify([
+        { memberId: 'alice', percentage: 60 },
+        { memberId: 'bob', percentage: 20 },
+        { memberId: 'charlie', percentage: 20 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M101', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M101', 'bob', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M101', 'charlie', 'CONFIRMED')
+
+    const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P100'))
+    const byMember = Object.fromEntries(result.members.map((m) => [m.memberId, m.percentage]))
+
+    // 精确平均：alice 50、bob 27.5、charlie 22.5
+    expect(byMember.alice).toBe(50)
+    const sum = result.members.reduce((s, m) => s + m.percentage, 0)
+    expect(sum).toBe(100) // 逐项 Math.round 会得到 101
+    expect(sum).not.toBe(101)
+  })
+
+  test('成员参与里程碑数量不同时，总和可能不是 100 但必须等于精确平均之和的取整', async () => {
+    // bob 只参与 M001（31），alice/charlie 参与 M001 与 M004。
+    // 此时精确平均之和 != 100，属正常业务结果，但取整仍须与 Math.round(精确和) 一致。
+    ctx.stub.setTimestamp('2026-09-17T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M005', 'P001', 'uneven', 'd', 'u.zip', HASH_C,
+      JSON.stringify([
+        { memberId: 'alice', percentage: 70 },
+        { memberId: 'charlie', percentage: 30 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M005', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M005', 'charlie', 'CONFIRMED')
+
+    const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P001'))
+    const byMember = Object.fromEntries(result.members.map((m) => [m.memberId, m.percentage]))
+
+    // alice (42+70)/2 = 56，bob 31（仅 M001），charlie (27+30)/2 = 28.5
+    expect(byMember.alice).toBe(56)
+    expect(byMember.bob).toBe(31)
+    // 精确和 = 56 + 31 + 28.5 = 115.5 -> targetSum 116
+    const sum = result.members.reduce((s, m) => s + m.percentage, 0)
+    expect(sum).toBe(116)
+    expect(Number.isInteger(byMember.charlie)).toBe(true)
   })
 
   test('没有 VERIFIED 里程碑时返回空 members 与 basedOnMilestones 0', async () => {

@@ -374,7 +374,16 @@ class ChainProofContract extends Contract {
 
   /**
    * 只统计 VERIFIED 里程碑的贡献分布。
-   * 聚合口径：某成员在其参与的所有 VERIFIED 里程碑中 percentage 的算术平均，四舍五入取整。
+   *
+   * 聚合口径：某成员在其参与的所有 VERIFIED 里程碑中 percentage 的算术平均，
+   * 再用最大余数法取整（见 _roundContributions）。
+   *
+   * 为什么不能直接 Math.round 每一项：
+   *   Math.round 对 .5 一律进位，多个成员同时命中 .5 时整数总和会超过 100。
+   *   实测：alice 40/60、bob 35/20、charlie 25/20 两个里程碑，
+   *   精确平均为 50 / 27.5 / 22.5，逐项 Math.round 得 50+28+23 = 101。
+   *   这会让 Dashboard 的贡献占比图对不上，答辩时出现「贡献总和 101%」。
+   *
    * @returns {Promise<string>} {projectId, members:[{memberId, percentage}], basedOnMilestones} JSON
    */
   async GetProjectContributions (ctx, projectId) {
@@ -403,14 +412,70 @@ class ChainProofContract extends Contract {
       }
     }
 
-    const members = [...totals.entries()]
+    const averages = [...totals.entries()]
       .map(([memberId, { sum, count }]) => ({
         memberId,
-        percentage: count === 0 ? 0 : Math.round(sum / count)
+        exact: count === 0 ? 0 : sum / count
       }))
       .sort((a, b) => a.memberId.localeCompare(b.memberId))
 
+    const members = this._roundContributions(averages)
     return JSON.stringify({ projectId, members, basedOnMilestones })
+  }
+
+  /**
+   * 最大余数法（Hamilton method）把浮点平均数取整为整数。
+   *
+   * 保证：整数之和 === Math.round(浮点之和)。
+   * 因此当所有成员参与了同样数量的 VERIFIED 里程碑时（每个里程碑内百分比之和为 100，
+   * 故浮点平均之和恰为 100），取整后仍严格等于 100。
+   *
+   * 确定性要求（重要）：
+   *   链码必须在所有背书节点上产出完全一致的结果，否则背书失败。
+   *   因此余数相同时用 memberId 升序作为稳定的次级排序键，
+   *   不依赖 Map 迭代顺序或数组 sort 的稳定性差异。
+   *
+   * @param {Array<{memberId: string, exact: number}>} averages 已按 memberId 升序排列
+   * @returns {Array<{memberId: string, percentage: number}>}
+   */
+  _roundContributions (averages) {
+    if (!Array.isArray(averages) || averages.length === 0) {
+      return []
+    }
+
+    const exactSum = averages.reduce((sum, item) => sum + item.exact, 0)
+    const targetSum = Math.round(exactSum)
+
+    const entries = averages.map((item) => {
+      const floor = Math.floor(item.exact)
+      return {
+        memberId: item.memberId,
+        percentage: floor,
+        remainder: item.exact - floor
+      }
+    })
+
+    const floorSum = entries.reduce((sum, item) => sum + item.percentage, 0)
+    // 因为每项 remainder ∈ [0,1)，故 remaining ∈ [0, entries.length]，不会为负
+    let remaining = targetSum - floorSum
+
+    if (remaining > 0) {
+      // 余数大者优先获得 +1；余数相同则按 memberId 升序，保证确定性
+      const order = entries
+        .map((item, index) => index)
+        .sort((a, b) => {
+          const diff = entries[b].remainder - entries[a].remainder
+          if (diff !== 0) return diff
+          return entries[a].memberId.localeCompare(entries[b].memberId)
+        })
+
+      for (let i = 0; i < remaining && i < order.length; i += 1) {
+        entries[order[i]].percentage += 1
+      }
+      remaining = 0
+    }
+
+    return entries.map(({ memberId, percentage }) => ({ memberId, percentage }))
   }
 
   // =========================================================================
