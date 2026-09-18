@@ -160,7 +160,19 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 
 ### GET `/projects/:projectId/contributions`
 
-只基于 `VERIFIED` milestones 统计。
+只基于 `VERIFIED` milestones 统计，并把每条已验证里程碑视为等权重样本。
+
+固定算法：
+
+1. `basedOnMilestones = N`，其中 `N` 是项目中 `VERIFIED` milestone 的数量。
+2. 对项目中的每个成员，把该成员在全部 `VERIFIED` milestones 中的 `percentage` 相加；未出现在某条 milestone 的成员在该条记录中按 `0` 计算。
+3. 精确累计比例为 `sum(member percentages) / N`。由于每条 milestone 的比例总和都是 100，所有成员的精确累计比例总和也必然是 100。
+4. API 只返回整数，因此使用最大余数法取整到总和严格等于 100；小数余数相同时按 `memberId` 升序分配，保证 Fabric 背书节点结果确定。
+5. `members` 必须包含项目的全部成员；没有参与任何已验证 milestone 的成员返回 `percentage: 0`。返回数组按 `memberId` 升序排列。
+
+项目尚无 `VERIFIED` milestone 时，返回全部项目成员且比例均为 `0`，同时 `basedOnMilestones: 0`。
+
+例如 M1 只有 alice 且为 100%，M2 只有 bob 且为 100%，两条都验证通过时，最终结果是 alice 50%、bob 50%，不是 100% + 100%。
 
 ```json
 {
@@ -197,6 +209,10 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 生成条件：
 - member 属于该项目；
 - 项目至少有 1 条 `VERIFIED` milestone。
+
+项目成员即使没有出现在任何已验证 milestone 的 contributors 中，也允许签发证书；此时 `contributionPercentage` 为 `0`。
+
+`milestoneIds` 是本次贡献比例计算所依据的**全部 `VERIFIED` milestone ID 快照**，不是只列出该成员作为 contributor 出现过的记录。数组按 milestone 的 `createdAt` 正序排列，时间相同时按 `milestoneId` 升序排列。
 
 同一 `projectId + memberId` 重复生成时返回已有证书，不重复产生新的 certificateId。
 
@@ -269,7 +285,7 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 - `projectId: string`
 - `memberId: string`
 - `contributionPercentage: number`
-- `milestoneIds: string[]`
+- `milestoneIds: string[]`（签发时用于统计的全部 VERIFIED milestone ID 快照）
 - `issuedAt: ISO 8601 string`
 - `verificationStatus: string`
 - `txId: string`
@@ -324,3 +340,4 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 9. Certificate / verify 系列
 
 BC 每完成一个接口就通知 A，不需要等待整套后端全部完成。
+

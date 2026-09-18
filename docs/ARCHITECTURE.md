@@ -169,7 +169,15 @@ MVP 固定规则：
 
 ## 8. 贡献统计规则
 
-Contribution Dashboard 只统计 `VERIFIED` 里程碑。
+Contribution Dashboard 只统计 `VERIFIED` 里程碑，每条已验证里程碑权重相同。
+
+设已验证里程碑数量为 `N`：
+
+- 每个项目成员的精确累计比例为：该成员在全部已验证里程碑中的 percentage 总和除以 `N`；未参与某条里程碑时按 0 计算。
+- 对精确结果使用最大余数法转成整数，最终所有成员的 percentage 总和必须严格等于 100。
+- 余数相同时按 `memberId` 升序分配，保证所有 Fabric 背书节点得到相同结果。
+- 返回项目全部成员，包括累计比例为 0 的成员；数组按 `memberId` 升序排列。
+- 没有已验证里程碑时，全员返回 0，`basedOnMilestones` 返回 0。
 
 后端返回：
 
@@ -189,6 +197,8 @@ Contribution Dashboard 只统计 `VERIFIED` 里程碑。
 
 - 项目至少有 1 条 `VERIFIED` milestone 才允许签发。
 - 成员必须属于该项目。
+- 项目成员没有参与已验证 milestone 时仍可签发，`contributionPercentage` 为 0。
+- `milestoneIds` 保存签发时用于统计的全部 `VERIFIED` milestone ID，作为不可变快照；按 `createdAt`、`milestoneId` 正序排列。
 - 同一 `projectId + memberId` 重复请求时返回已存在的证书。
 - Certificate 保存 / 返回 `txId`，用于答辩时展示链上交易依据。
 
@@ -202,3 +212,4 @@ Contribution Dashboard 只统计 `VERIFIED` 里程碑。
 - 其他秘密配置
 
 需要配置模板时使用 `.env.example`。
+
