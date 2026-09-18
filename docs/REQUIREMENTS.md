@@ -111,9 +111,10 @@ MVP 采用“链下托管 + 前后端双算 SHA-256”的方案：
 ### FR-09 贡献证明生成
 满足以下条件时可以为成员生成贡献证明：
 - 该成员属于项目；
-- 项目至少存在 1 条 `VERIFIED` 里程碑。
+- 项目至少存在 1 条 `VERIFIED` 里程碑；
+- 该成员累计 `contributionPercentage` 大于 0。
 
-项目成员不要求必须出现在已验证里程碑的 contributors 中；没有参与时允许签发 0% 证明。证明中的 `milestoneIds` 固定为签发时用于统计的全部 `VERIFIED` milestone ID，作为该证书的计算依据快照，并按 `createdAt`、`milestoneId` 正序排列。
+0% 成员仍显示在 Contribution Dashboard 中，但不签发贡献证明。证明中的 `milestoneIds` 只包含该成员实际参与（contributors 中 `percentage > 0`）的 `VERIFIED` milestone ID，并按 `createdAt`、`milestoneId` 正序排列。
 
 同一 `projectId + memberId` 重复请求生成时，返回已有证明，不重复签发新的 certificateId。
 
