@@ -197,8 +197,8 @@ Contribution Dashboard 只统计 `VERIFIED` 里程碑，每条已验证里程碑
 
 - 项目至少有 1 条 `VERIFIED` milestone 才允许签发。
 - 成员必须属于该项目。
-- 项目成员没有参与已验证 milestone 时仍可签发，`contributionPercentage` 为 0。
-- `milestoneIds` 保存签发时用于统计的全部 `VERIFIED` milestone ID，作为不可变快照；按 `createdAt`、`milestoneId` 正序排列。
+- 成员累计 `contributionPercentage` 必须大于 0；0% 成员保留在 Contribution Dashboard 中，但不能签发证书，返回 `NO_VERIFIED_CONTRIBUTION`。
+- `milestoneIds` 只保存该成员实际参与（contributors 中 `percentage > 0`）的 `VERIFIED` milestone ID，作为不可变快照；按 `createdAt`、`milestoneId` 正序排列。
 - 同一 `projectId + memberId` 重复请求时返回已存在的证书。
 - Certificate 保存 / 返回 `txId`，用于答辩时展示链上交易依据。
 
