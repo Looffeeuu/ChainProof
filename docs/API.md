@@ -208,11 +208,12 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 
 生成条件：
 - member 属于该项目；
-- 项目至少有 1 条 `VERIFIED` milestone。
+- 项目至少有 1 条 `VERIFIED` milestone；
+- 该成员的累计 `contributionPercentage` 必须大于 `0`。
 
-项目成员即使没有出现在任何已验证 milestone 的 contributors 中，也允许签发证书；此时 `contributionPercentage` 为 `0`。
+0% 成员仍必须显示在 Contribution Dashboard 中，但不能生成证书；后端返回 HTTP 409 + `NO_VERIFIED_CONTRIBUTION`。
 
-`milestoneIds` 是本次贡献比例计算所依据的**全部 `VERIFIED` milestone ID 快照**，不是只列出该成员作为 contributor 出现过的记录。数组按 milestone 的 `createdAt` 正序排列，时间相同时按 `milestoneId` 升序排列。
+`milestoneIds` 只保存该成员实际参与的 `VERIFIED` milestone ID：即该成员在该 milestone 的 contributors 中且 `percentage > 0`。数组按 milestone 的 `createdAt` 正序排列，时间相同时按 `milestoneId` 升序排列。
 
 同一 `projectId + memberId` 重复生成时返回已有证书，不重复产生新的 certificateId。
 
@@ -285,7 +286,7 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 - `projectId: string`
 - `memberId: string`
 - `contributionPercentage: number`
-- `milestoneIds: string[]`（签发时用于统计的全部 VERIFIED milestone ID 快照）
+- `milestoneIds: string[]`（该成员实际参与的 VERIFIED milestone ID 快照）
 - `issuedAt: ISO 8601 string`
 - `verificationStatus: string`
 - `txId: string`
@@ -322,6 +323,7 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 | `ALREADY_DECIDED` | 409 | 当前成员已经表态 |
 | `MILESTONE_CLOSED` | 409 | milestone 已 VERIFIED / REJECTED |
 | `FILE_HASH_MISMATCH` | 400 | 前后端文件哈希不一致 |
+| `NO_VERIFIED_CONTRIBUTION` | 409 | 成员累计已验证贡献为 0，不能签发证书 |
 | `VALIDATION_ERROR` | 400 | 普通参数校验失败 |
 | `INTERNAL_ERROR` | 500 | 未分类服务端错误 |
 
