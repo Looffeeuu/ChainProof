@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { evaluateTransaction, submitTransaction } from '../services/fabric.service.js'
+import { visibleProjects } from '../utils/project-access.js'
 
 function currentMemberId(req) {
   const headerValue = req.get('X-Member-Id')
@@ -9,11 +10,8 @@ function currentMemberId(req) {
 export async function listProjects(req, res, next) {
   try {
     const memberId = currentMemberId(req)
-    const projects = memberId
-      ? await evaluateTransaction('GetProjectsByMember', memberId)
-      : await evaluateTransaction('GetAllProjects')
-
-    res.json(Array.isArray(projects) ? projects : [])
+    const projects = await evaluateTransaction('GetAllProjects')
+    res.json(visibleProjects(projects, memberId))
   } catch (error) {
     next(error)
   }
@@ -62,3 +60,4 @@ export async function getProject(req, res, next) {
     next(error)
   }
 }
+
