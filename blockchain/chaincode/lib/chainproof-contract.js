@@ -449,10 +449,10 @@ class ChainProofContract extends Contract {
     const N = basedOnMilestones
     const targetSum = 100
 
-    // 整数运算：floor = sum div N，remainder = sum mod N
+    // 严格整数运算：先取余再减再除，全程不经过浮点除法
     const entries = memberSums.map(({ memberId, sum }) => {
-      const floor = Math.floor(sum / N)
       const remainder = sum % N
+      const floor = (sum - remainder) / N
       return { memberId, percentage: floor, remainder }
     })
 
@@ -519,16 +519,15 @@ class ChainProofContract extends Contract {
     if (contributions.basedOnMilestones === 0) {
       throw new ChainProofError(
         'NO_VERIFIED_CONTRIBUTION',
-        `项目 ${projectId} 还没有已验证（VERIFIED）的里程碑，暂时无法签发贡献证明。`
+        '累计贡献比例为 0%，不能签发证书。'
       )
     }
 
     const memberContribution = contributions.members.find((item) => item.memberId === memberId)
-    // 0% 成员（累计贡献为 0）不能签发证书
     if (!memberContribution || memberContribution.percentage <= 0) {
       throw new ChainProofError(
         'NO_VERIFIED_CONTRIBUTION',
-        `成员 ${memberId} 在项目 ${projectId} 的累计贡献比例为 0%，不能签发证书。`
+        '累计贡献比例为 0%，不能签发证书。'
       )
     }
 

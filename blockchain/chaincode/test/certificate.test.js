@@ -486,6 +486,29 @@ describe('ChainProofContract - Certificate', () => {
     expect(ctx.stub.keys()).toHaveLength(keysAfterFirst)
   })
 
+  test('项目数据变化后幂等签发仍返回原证书', async () => {
+    // 先签发证书
+    ctx.stub.setTimestamp('2026-09-20T10:00:00.000Z')
+    ctx.stub.nextTransaction('tx-issue-original')
+    const original = JSON.parse(await contract.IssueCertificate(ctx, 'CP-001', 'P001', 'alice'))
+
+    // 修改项目数据：将 alice 从成员中移除
+    await ctx.stub.putState('PROJECT_P001', Buffer.from(JSON.stringify({
+      docType: 'project', projectId: 'P001', name: 'ChainProof Demo',
+      description: '课程演示项目', ownerId: 'bob', members: ['bob', 'charlie'],
+      createdAt: '2026-09-11T10:00:00.000Z', status: 'ACTIVE', txId: 'tx-rewrite'
+    })))
+
+    // 再次签发，应返回原证书（幂等），不因成员被移除而报错
+    ctx.stub.setTimestamp('2026-09-25T10:00:00.000Z')
+    ctx.stub.nextTransaction('tx-issue-after-change')
+    const afterChange = JSON.parse(await contract.IssueCertificate(ctx, 'CP-999', 'P001', 'alice'))
+
+    expect(afterChange).toEqual(original)
+    expect(afterChange.certificateId).toBe('CP-001')
+    expect(afterChange.txId).toBe('tx-issue-original')
+  })
+
   test('同一项目不同成员可各自签发', async () => {
     ctx.stub.nextTransaction('tx-issue-a')
     const alice = JSON.parse(await contract.IssueCertificate(ctx, 'CP-001', 'P001', 'alice'))
@@ -498,10 +521,10 @@ describe('ChainProofContract - Certificate', () => {
     expect(bob.contributionPercentage).toBe(31)
   })
 
-  test('项目无 VERIFIED 里程碑 -> VALIDATION_ERROR，拒绝签发', async () => {
+  test('项目无 VERIFIED 里程碑 -> NO_VERIFIED_CONTRIBUTION，拒绝签发', async () => {
     ctx.stub.nextTransaction('tx-issue-none')
     await expect(contract.IssueCertificate(ctx, 'CP-010', 'P002', 'bob'))
-      .rejects.toThrow(/还没有已验证/)
+      .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: 累计贡献比例为 0%，不能签发证书。$/)
   })
 
   test('成员不属于项目 -> VALIDATION_ERROR', async () => {
@@ -533,7 +556,46 @@ describe('ChainProofContract - Certificate', () => {
     // charlie 是项目成员但累计贡献为 0%
     ctx.stub.nextTransaction('tx-issue-zero')
     await expect(contract.IssueCertificate(ctx, 'CP-020', 'P004', 'charlie'))
-      .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: /)
+      .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: 累计贡献比例为 0%，不能签发证书。$/)
+  })
+
+  test('成员贡献经最大余数法取整后为 0% -> NO_VERIFIED_CONTRIBUTION', async () => {
+    // 构造一个项目：3 个 VERIFIED 里程碑，某成员贡献极小，取整后为 0
+    await contract.CreateProject(ctx, 'P005', 'rounding to zero', 'd', 'alice',
+      JSON.stringify(['alice', 'bob', 'tiny']))
+    ctx.stub.setTimestamp('2026-09-18T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M030', 'P005', 'first', 'd', 'a.zip', HASH_A,
+      JSON.stringify([{ memberId: 'alice', percentage: 98 }, { memberId: 'bob', percentage: 2 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M030', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M030', 'bob', 'CONFIRMED')
+
+    ctx.stub.setTimestamp('2026-09-19T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M031', 'P005', 'second', 'd', 'b.zip', HASH_B,
+      JSON.stringify([{ memberId: 'alice', percentage: 98 }, { memberId: 'bob', percentage: 2 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M031', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M031', 'bob', 'CONFIRMED')
+
+    ctx.stub.setTimestamp('2026-09-20T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M032', 'P005', 'third', 'd', 'c.zip', HASH_C,
+      JSON.stringify([{ memberId: 'alice', percentage: 98 }, { memberId: 'bob', percentage: 2 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M032', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M032', 'bob', 'CONFIRMED')
+
+    // tiny 是项目成员但从未参与任何 VERIFIED 里程碑，累计贡献为 0%
+    ctx.stub.nextTransaction('tx-issue-tiny')
+    await expect(contract.IssueCertificate(ctx, 'CP-030', 'P005', 'tiny'))
+      .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: 累计贡献比例为 0%，不能签发证书。$/)
+
+    // 验证 GetProjectContributions 中 tiny 的 percentage 为 0
+    const contributions = JSON.parse(await contract.GetProjectContributions(ctx, 'P005'))
+    const tinyMember = contributions.members.find((m) => m.memberId === 'tiny')
+    expect(tinyMember.percentage).toBe(0)
   })
 
   test('缺参数 -> VALIDATION_ERROR', async () => {
