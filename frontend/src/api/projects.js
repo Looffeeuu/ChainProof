@@ -13,7 +13,7 @@ import { session } from '../stores/session.js'
  * 项目列表。
  *
  * 真接口靠请求头 `X-Member-Id` 判断返回谁的项目（client.js 统一加），
- * 带了就只返回这个人参与的，没带就返回全部（spec/03 §6）。
+ * 带了就只返回这个人参与的，没带就返回全部（docs/API.md §2）。
  * 假数据这边拿不到请求头，所以显式把当前身份传给假接口，
  * **保证两条路径的行为一致**——否则切到真接口那天，
  * 「换个身份看到的项目变少了」这个变化会突然冒出来。
@@ -29,7 +29,7 @@ export const getProject = (projectId) =>
 
 /**
  * 创建项目。真接口的 ownerId 优先取请求头里的 `X-Member-Id`，
- * 但仍然在 body 里带一份——C 线说 Header 缺失时会兼容 body.ownerId（spec/03 §2.1）。
+ * 但仍然在 body 里带一份——C 线说 Header 缺失时会兼容 body.ownerId（docs/API.md §2）。
  *
  * @returns {Promise<object>} 新建的 Project
  */

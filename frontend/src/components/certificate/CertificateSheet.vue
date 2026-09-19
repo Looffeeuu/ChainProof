@@ -64,7 +64,7 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
     </dl>
 
     <!-- 链上交易 ID：这张纸声称的东西，凭据在这里。
-         印在证书上，拿到纸质件的人也能自己去账本上核（spec/03 §5） -->
+         印在证书上，拿到纸质件的人也能自己去账本上核（docs/API.md §6） -->
     <div v-if="certificate.txId" class="tx">
       <span class="t-label">链上交易</span>
       <HashText :value="certificate.txId" :keep="16" label="链上交易 ID" />

@@ -6,9 +6,9 @@
  * 没有这一层的话它只能塞进 view，于是概览页和项目列表页各写一遍
  * 「先取项目，再按项目取里程碑」，还各自绕过 `stores/projects.js` 的缓存。
  *
- * 将来还有一个收益：`spec/04 议题三` 还没定后端要不要给聚合端点
- * （现在没有「取全部里程碑」的端点，只能按项目逐个取，是 N+1）。
- * 定下来之后只改这个文件，两个页面一行都不用动。
+ * 另一个收益：接口里没有「取全部里程碑」的端点，只能按项目逐个取，是 N+1。
+ * 组长 09-18 定的是 MVP 先不加批量接口，真出现性能问题再由 C 线补；
+ * 补上之后只改这个文件，两个页面一行都不用动。
  */
 import { ensureProjects } from '../stores/projects.js'
 import { session } from '../stores/session.js'
@@ -18,7 +18,7 @@ import { listCertificates } from './certificates.js'
 /**
  * 每个项目连同它自己的里程碑。项目列表页与概览页共用。
  *
- * 这里就是 `spec/04 议题三` 说的那个 N+1：一次取项目，再并发 N 次取里程碑。
+ * 这里就是那个 N+1：一次取项目，再并发 N 次取里程碑。
  * 三个项目发四次请求，这个规模完全可以接受；真接口有了聚合端点再换。
  *
  * @returns {Promise<Array<{ project: object, milestones: object[] }>>}
@@ -36,7 +36,7 @@ export async function projectsWithMilestones() {
  * 「这份数据说明了什么」，不是「这一屏怎么排」。哪天概览页改版，
  * 换的是排版，不是这几个数怎么算。
  *
- * **证书要按当前身份过滤**（`spec/03 §8.1` 支持 memberId）。项目和里程碑本来
+ * **证书要按当前身份过滤**（`docs/API.md §5` 支持 memberId）。项目和里程碑本来
  * 就按 `X-Member-Id` 过滤，证书取全量的话，同一屏上半部分是「我的项目」、
  * 下半部分是「所有人的证书」，里面还会有我根本打不开的项目。
  *

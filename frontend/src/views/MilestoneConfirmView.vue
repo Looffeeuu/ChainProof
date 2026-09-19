@@ -122,7 +122,7 @@ async function decide(decision) {
   deciding.value = decision
   decideError.value = null
   try {
-    // 接口返回更新后的完整 Milestone（C 线已确认按此实现，spec/03 §4.4），
+    // 接口返回更新后的完整 Milestone（C 线已确认按此实现，docs/API.md §3），
     // 直接写回本地状态，徽章、进度和 txId 立刻变化，不用再发一次请求。
     // memberId 只有假接口用得上——真接口靠请求头 X-Member-Id 认人
     milestone.value = await confirmMilestone(route.params.id, {
@@ -174,7 +174,7 @@ async function decide(decision) {
 
       <!-- 徽章说「链上已验证」，这一行就是它的依据。
            txId 指向最近一次让这条记录进入当前状态的那笔 Fabric 交易，
-           所以每次有人表态、状态发生变化，它都会换一个（spec/03 §5）。 -->
+           所以每次有人表态、状态发生变化，它都会换一个（docs/API.md §6）。 -->
       <p v-if="milestone.txId" class="t-small t-soft tx-line">
         <span class="t-label">链上交易</span>
         <HashText :value="milestone.txId" label="链上交易 ID" />

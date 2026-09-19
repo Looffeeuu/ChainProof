@@ -33,7 +33,7 @@ const touched = reactive({ title: false, file: false })
 /**
  * 选中文件后，**在浏览器里**算出这份文件的 SHA-256。
  *
- * 为什么前端也要算（后端本来就会算一遍，spec/03 §4.2）：
+ * 为什么前端也要算（后端本来就会算一遍，docs/API.md §3）：
  * 存证的意思是「我承诺这份内容」，而如果哈希只由服务端算，
  * 用户承诺的是一串自己没算过、也没法验证的字符。两边各算一次并比对，
  * 这个承诺才成立。这也是 S3、Docker Registry、Git 的通行做法。
@@ -75,7 +75,7 @@ const submitted = ref(false)
  *   2. 大文件后算完，**把 fileHash 覆盖成 hash(大)**；
  *   3. 此时 form.file 是小文件，fileHash 是大文件的哈希。
  *
- * 提交出去就是一条文件与哈希不匹配的存证记录。后端会按 spec/03 §4.2
+ * 提交出去就是一条文件与哈希不匹配的存证记录。后端会按 docs/API.md §3
  * 做交叉校验，但一个存证系统不该指望下游帮自己兜住这种错。
  *
  * 票据与取消各管一半：取消让已经没用的计算尽早停下（纯 JS 路径每块检查一次），
@@ -263,7 +263,7 @@ async function submit() {
       fileName: form.file?.name ?? '',
       file: form.file,
       // 浏览器这边算出来的那份。真接口会把它作为 clientFileHash 发出去，
-      // 由后端与自己算的比对（spec/03 §4.2）
+      // 由后端与自己算的比对（docs/API.md §3）
       fileHash: fileHash.value,
       // 比例为 0 的成员不进声明：他没有参与这次成果，
       // 让他去确认一份「你贡献了 0%」的声明没有意义

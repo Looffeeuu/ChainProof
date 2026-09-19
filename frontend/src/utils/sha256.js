@@ -185,7 +185,7 @@ const CHUNK = 1024 * 1024
  * 算一个 File / Blob 的 SHA-256。
  *
  * 算的是**文件的原始字节流**，不含文件名、大小、修改时间——
- * 这一点必须和后端一致，否则两边永远对不上（见 spec/03 §4.2）。
+ * 这一点必须和后端一致，否则两边永远对不上（见 docs/API.md §3）。
  *
  * @param {Blob} file
  * @param {{ onProgress?: (ratio: number) => void, signal?: AbortSignal }} [options]

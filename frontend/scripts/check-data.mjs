@@ -82,7 +82,7 @@ await check('枚举取值都在 spec/02 §2.3 的清单里', () => {
 })
 
 // 证书用 VALID，里程碑用 VERIFIED。这两个词同形不同义，是最容易写混的一处：
-// 前端一度按 VERIFIED 判断证书是否有效，而 C 线定的是 VALID（spec/03 §9）
+// 前端一度按 VERIFIED 判断证书是否有效，而 C 线定的是 VALID（docs/API.md §5）
 await check('证书的 verificationStatus 是 VALID，不是 VERIFIED', () => {
   certificates.forEach((c) =>
     assert(c.verificationStatus === 'VALID',
@@ -142,7 +142,7 @@ await check('错误形状与 spec/02 §2.6 一致（code + message）', async ()
   }
 })
 
-await check('里程碑按时间正序返回（spec/02 §5.1）', async () => {
+await check('里程碑按时间正序返回（docs/API.md §2）', async () => {
   const list = await api.listMilestones('P001')
   const sorted = [...list].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   assert(JSON.stringify(list) === JSON.stringify(sorted), '顺序不是正序')
@@ -218,7 +218,7 @@ await check('验证存在的证书回一个信封，本体在 certificate 里', 
   return `${r.verificationStatus} · ${r.certificate.txId.slice(0, 16)}…`
 })
 
-// C 线规则（spec/03 §6）：带了 X-Member-Id 只返回这个人参与的项目，
+// C 线规则（docs/API.md §2）：带了 X-Member-Id 只返回这个人参与的项目，
 // 不带返回全部。假接口必须同口径，否则切真接口那天行为会突变
 await check('项目列表按成员过滤，不传成员时返回全部', async () => {
   const all = await api.listProjects()
@@ -229,7 +229,7 @@ await check('项目列表按成员过滤，不传成员时返回全部', async (
   return `全部 ${all.length} 个，bob 能看到 ${bobs.length} 个`
 })
 
-// —— 证书签发（spec/03 §8）——
+// —— 证书签发（docs/API.md §5）——
 await check('签发证书要求成员属于该项目', async () => {
   try {
     await api.createCertificate('P003', { memberId: 'bob' })   // P003 只有 alice 和 charlie

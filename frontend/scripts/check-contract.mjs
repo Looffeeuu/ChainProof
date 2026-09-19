@@ -1,5 +1,5 @@
 /**
- * 契约形状自检：**每个接口返回的东西，逐字段对照 `spec/03` 的表。**
+ * 契约形状自检：**每个接口返回的东西，逐字段对照 `docs/API.md` §6 的实体字段。**
  *
  *   npm run check:contract                      # 量假接口
  *   CONTRACT_BASE=http://localhost:3000/api npm run check:contract   # 量真接口
@@ -23,7 +23,7 @@
  * 同一套 SCHEMA 打在真响应上，**不用改一行判据**。
  *
  * 假接口模式下 Node 直接 import `mock/handlers.js`（纯 JS，不需要构建）；
- * 真接口模式下走 fetch，身份用 `X-Member-Id`（spec/03 §2.1）。
+ * 真接口模式下走 fetch，身份用 `X-Member-Id`（docs/API.md §0）。
  */
 import * as mock from '../src/mock/handlers.js'
 
@@ -31,7 +31,7 @@ const BASE = process.env.CONTRACT_BASE ?? ''
 const AS = process.env.CONTRACT_MEMBER ?? 'alice'
 
 // ——————————————————————————————————————————————————————————
-// 判据：spec/03 §5 的四张表
+// 判据：docs/API.md §6 的三个实体，外加 §4 的 Contributions
 // ——————————————————————————————————————————————————————————
 
 const hex64 = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v)
@@ -119,7 +119,7 @@ const SCHEMA = {
     memberId: R.str,
     percentage: R.pct
   },
-  /** 查无此证：只有这两个字段，多一个都不该有（spec/03 §9） */
+  /** 查无此证：只有这两个字段，多一个都不该有（docs/API.md §5） */
   NotFound: {
     certificateId: R.str,
     verificationStatus: R.certStatus
@@ -285,7 +285,7 @@ async function main() {
     )
   }
 
-  // 查不到是 200 + NOT_FOUND，不是 404、不是抛错（spec/03 §9）。
+  // 查不到是 200 + NOT_FOUND，不是 404、不是抛错（docs/API.md §5）。
   // 这条前端依赖得很硬：公开验证页把「查无此证」当成一个正常结果渲染
   const missing = await CALLS.verifyCertificate('CERT-NO-SUCH-THING')
   report(
@@ -333,7 +333,7 @@ async function main() {
   for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'}  ${r.label.padEnd(42)} ${r.detail}`)
   console.log(
     failed === 0
-      ? `\n${results.length} 个返回值，字段与类型都对得上 spec/03 §5。`
+      ? `\n${results.length} 个返回值，字段与类型都对得上 docs/API.md §6。`
       : `\n${failed} 处形状对不上。`
   )
   process.exit(failed === 0 ? 0 : 1)

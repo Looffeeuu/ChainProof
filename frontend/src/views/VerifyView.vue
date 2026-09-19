@@ -166,7 +166,7 @@ const verdict = computed(() => {
           <dd class="t-nums">{{ formatDate(result.issuedAt) || '—' }}</dd>
         </div>
         <!-- 这一页要回答的就是「凭什么信」。没有交易 ID，
-             上面那句「与存证记录一致」就只是本站的一面之词（spec/03 §5） -->
+             上面那句「与存证记录一致」就只是本站的一面之词（docs/API.md §6） -->
         <div v-if="result.txId" class="wide">
           <dt class="t-label">链上交易</dt>
           <dd><HashText :value="result.txId" :keep="16" label="链上交易 ID" /></dd>

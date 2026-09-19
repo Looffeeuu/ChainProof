@@ -4,7 +4,7 @@
  *
  * 业务判断一律不在这里——它不知道项目、里程碑、证书是什么。
  *
- * 为什么身份放在这一层：C 线定的方案是请求头 `X-Member-Id`（spec/03 §2.1），
+ * 为什么身份放在这一层：C 线定的方案是请求头 `X-Member-Id`（docs/API.md §0），
  * 这是**所有请求都要带**的横切信息。放在资源函数里的话，
  * 十几个函数每个都要接一个 memberId 参数再传下来，漏一个就少一个请求带不上身份，
  * 而且这种漏掉不会报错，只会让后端以为没有登录。
@@ -28,7 +28,7 @@ async function request(path, options = {}) {
   // 手写会让后端解析不出字段
   const headers = options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }
 
-  // 当前演示身份。真正的登录态接上之后，改这一行即可（spec/03 §2.1）
+  // 当前演示身份。真正的登录态接上之后，改这一行即可（docs/API.md §0）
   if (session.currentMemberId) headers['X-Member-Id'] = session.currentMemberId
 
   let res

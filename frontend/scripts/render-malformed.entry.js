@@ -52,7 +52,7 @@ async function render(Component, props) {
   return renderToString(app)
 }
 
-// —— 好数据。字段照 spec/03 §5，与 mock/fixtures.js 同形但内容无关 ——
+// —— 好数据。字段照 docs/API.md §6，与 mock/fixtures.js 同形但内容无关 ——
 
 const project = {
   projectId: 'PX01',

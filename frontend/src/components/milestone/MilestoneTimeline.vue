@@ -13,7 +13,7 @@ import { asObjectList } from '../../utils/list.js'
  *
  * 排序在这里做（倒序，最新的在上），而不是让调用方排好再传进来：
  * 「时间线怎么排」是这个组件的职责，换成正序也只改这一处。
- * 接口给的是正序（spec/02 §5.1），所以这里要翻过来。
+ * 接口给的是正序（docs/API.md §2），所以这里要翻过来。
  */
 const props = defineProps({
   milestones: { type: Array, default: () => [] }
@@ -57,7 +57,7 @@ const TONE = {
         </div>
 
         <!-- 链上交易 ID。没有它的话，「链上已验证」那个徽章在界面上没有任何依据可指，
-             整个产品最核心的主张就只是一句需要被相信的话（spec/03 §5） -->
+             整个产品最核心的主张就只是一句需要被相信的话（docs/API.md §6） -->
         <p v-if="m.txId" class="t-small t-soft tx">
           <span class="t-label">链上交易</span>
           <HashText :value="m.txId" :label="`${m.title} 的链上交易 ID`" />

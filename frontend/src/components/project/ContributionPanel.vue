@@ -5,7 +5,7 @@ import { memberTone } from '../../utils/member-tone.js'
 import { asObjectList } from '../../utils/list.js'
 
 /**
- * 累计贡献比例。数据来自 GET /api/projects/:id/contributions（spec/02 §5.1），
+ * 累计贡献比例。数据来自 GET /api/projects/:id/contributions（docs/API.md §4），
  * 前端只负责画，不在这里算——比例怎么算是后端与链上的事。
  *
  * 一条横条按比例分段，下面配一份文字清单。只有横条是不够的：

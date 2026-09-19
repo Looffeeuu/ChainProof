@@ -41,7 +41,7 @@ function fakeTxId() {
 /**
  * 项目列表。
  *
- * C 线的规则（spec/03 §6）：带了 `X-Member-Id` 就只返回这个人参与的项目，
+ * C 线的规则（docs/API.md §2）：带了 `X-Member-Id` 就只返回这个人参与的项目，
  * 没带就返回全部（演示 / 调试的降级模式）。假接口照同一口径实现——
  * 否则切到真接口那天，「切换身份看到的项目不一样」这个行为会突然冒出来。
  */
@@ -75,7 +75,7 @@ export async function createProject(payload) {
   return clone(created)
 }
 
-/** 按时间正序返回（spec/02 §5.1 那一行要求的顺序） */
+/** 按时间正序返回（docs/API.md §2） */
 export async function listMilestones(projectId) {
   await delay()
   return clone(
@@ -115,7 +115,7 @@ export async function createMilestone(projectId, payload) {
     confirmations: [],
     createdAt: new Date().toISOString(),
     status: 'PENDING_CONFIRMATION',
-    // 真接口给的是这次写入 Fabric 的交易 ID（spec/03 §5）
+    // 真接口给的是这次写入 Fabric 的交易 ID（docs/API.md §6）
     txId: fakeTxId()
   }
   db.milestones.push(created)
@@ -123,9 +123,7 @@ export async function createMilestone(projectId, payload) {
 }
 
 /**
- * 提交一次确认，返回**更新后的完整 Milestone**。
- * 这正是 spec/02 §5.1 里那个还没问 C 线的问题——假接口先按前端需要的形状实现，
- * 真接口如果给不了，适配写在 api/ 那一层，视图不动。
+ * 提交一次确认，返回**更新后的完整 Milestone**（docs/API.md §3）。
  */
 export async function confirmMilestone(milestoneId, { memberId, decision }) {
   await delay()
@@ -144,14 +142,14 @@ export async function confirmMilestone(milestoneId, { memberId, decision }) {
 
   found.confirmations.push({ memberId, decision, timestamp: new Date().toISOString() })
 
-  // 一人拒绝即整条拒绝；全员确认才验证通过（spec/03 §4.2，B 线已按此实现）
+  // 一人拒绝即整条拒绝；全员确认才验证通过（docs/API.md §3，B 线已按此实现）
   if (decision === 'REJECTED') {
     found.status = 'REJECTED'
   } else if (found.confirmations.length === found.contributors.length) {
     found.status = 'VERIFIED'
   }
   // 状态变了就换一个新的 txId：里程碑上挂的那个，指的是
-  // 「最近一次让它进入当前状态」的那笔交易，不是创建时那笔（spec/03 §5）
+  // 「最近一次让它进入当前状态」的那笔交易，不是创建时那笔（docs/API.md §6）
   found.txId = fakeTxId()
   return clone(found)
 }
@@ -184,7 +182,7 @@ export async function getCertificate(certificateId) {
   return clone(found)
 }
 
-/** 证书列表。两个筛选参数都可选（spec/03 §8.1） */
+/** 证书列表。两个筛选参数都可选（docs/API.md §5） */
 export async function listCertificates({ projectId, memberId } = {}) {
   await delay()
   return clone(
@@ -260,11 +258,9 @@ export async function createCertificate(projectId, { memberId } = {}) {
  * 「查无此证」是一次有效的验证结果，不是接口错误。
  * 查得到时这个字段是 `VALID`，注意它和 Milestone.status 的 `VERIFIED` 不是一回事。
  *
- * **命中时返回的是一个信封，证书本体在 `certificate` 里**，照
- * `docs/API.md §5` 的形状。这一处两边曾经各填各的：`spec/03` 只规定了
- * 查不到的情况，从没说过命中时长什么样，于是前端按扁平实现、
- * `docs/API.md` 写的是嵌套。以 `docs/API.md` 为准（它是唯一写明的一方），
- * 假接口跟着它——这样演示走的和联调走的是同一条代码路径。
+ * **命中时返回的是一个信封，证书本体在 `certificate` 里**，照 `docs/API.md §5`
+ * （组长 09-18 确认）。不要改成直接返回扁平的 Certificate：假接口必须和真接口同形，
+ * 演示走的和联调走的才是同一条代码路径。
  * 拆信封在 `api/certificates.js`，视图只看得到扁平的 Certificate。
  */
 export async function verifyCertificate(certificateId) {

@@ -25,7 +25,7 @@ import ContributionPanel from '../src/components/project/ContributionPanel.vue'
 import ContributionBreakdown from '../src/components/project/ContributionBreakdown.vue'
 import { projects, milestones, certificates } from '../src/mock/fixtures.js'
 
-// 按 createdAt 正序排——接口就是这么给的（spec/02 §5.1），
+// 按 createdAt 正序排——接口就是这么给的（docs/API.md §2），
 // 喂给组件的数据必须和真接口同形，否则测的是一个不存在的情况
 const p001 = milestones
   .filter((m) => m.projectId === 'P001')
