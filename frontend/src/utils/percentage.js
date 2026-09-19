@@ -38,6 +38,74 @@ export function largestRemainder(weights, total = 100) {
   return result
 }
 
+const utf8 = new TextEncoder()
+
+/**
+ * 按 UTF-8 无符号字节序比较两个字符串。`docs/API.md` §4 规定 memberId 的排序与平局
+ * 都用这个顺序，链码那边是 `Buffer.compare()`。
+ *
+ * **不能用 `<` 代替。** JS 的 `<` 比的是 UTF-16 码元，遇到 BMP 以外的字符（emoji 等）
+ * 与 U+E000–U+FFFF 之间的字符时，两者的先后是反的。也不能用 `localeCompare()`，
+ * 它的结果随运行环境的区域设置变化。
+ *
+ * @returns {number} 负数 / 0 / 正数
+ */
+export function compareUtf8(a, b) {
+  const x = utf8.encode(String(a))
+  const y = utf8.encode(String(b))
+  const n = Math.min(x.length, y.length)
+  for (let i = 0; i < n; i++) {
+    if (x[i] !== y[i]) return x[i] - y[i]
+  }
+  return x.length - y.length
+}
+
+/**
+ * 累计贡献比例，**逐字照 `docs/API.md` §4（PR #9 定稿）实现**，
+ * 链码与后端按同一算法，三处对同一组数据必须给出同一组数。
+ *
+ * 1. N = 已验证里程碑条数。N = 0 时全员 0，不做除法。
+ * 2. 每人 sum = 他在全部已验证里程碑里 percentage 之和，没参与的那条计 0。
+ * 3. floor = sum div N，remainder = sum mod N，**全程整数**。
+ *    不要改成 sum / N 再取小数部分：浮点余数会把本该相等的余数算成不等，
+ *    平局规则就不生效了（实例：199/3、100/3、1/3 的浮点小数部分三个都不相等）。
+ * 4. 剩下的 100 − Σfloor 个百分点按 remainder 从大到小发，平局按 memberId 字节序。
+ *
+ * 和上面的 largestRemainder 不是一回事：那个是提交页「平均分配」用的通用工具，
+ * 不受契约约束；**累计比例只准用这一个**。
+ *
+ * @param {string[]} memberIds 项目全部成员，0% 的也在结果里
+ * @param {{contributors: {memberId:string, percentage:number}[]}[]} verified 已验证的里程碑
+ * @returns {{memberId:string, percentage:number}[]} 按 memberId 字节序排列
+ */
+export function contributionShares(memberIds, verified) {
+  const n = verified.length
+  const rows = [...new Set(memberIds)].sort(compareUtf8).map((memberId) => {
+    let sum = 0
+    for (const m of verified) {
+      for (const c of m.contributors ?? []) {
+        if (c.memberId === memberId) sum += c.percentage
+      }
+    }
+    return { memberId, sum }
+  })
+
+  if (n === 0) return rows.map(({ memberId }) => ({ memberId, percentage: 0 }))
+
+  const result = rows.map((r) => {
+    const remainder = r.sum % n
+    // (sum − remainder) / N 恰好整除，结果就是 sum div N，中间不经过任何舍入
+    return { memberId: r.memberId, percentage: (r.sum - remainder) / n, remainder }
+  })
+  let rest = 100 - result.reduce((a, r) => a + r.percentage, 0)
+  const order = [...result].sort(
+    (a, b) => b.remainder - a.remainder || compareUtf8(a.memberId, b.memberId)
+  )
+  for (let i = 0; rest > 0 && i < order.length; i++, rest--) order[i].percentage += 1
+
+  return result.map(({ memberId, percentage }) => ({ memberId, percentage }))
+}
+
 /**
  * 整数相加求和。不做浮点比较——spec/02 §2.5 第 1 条：
  * 用小数会出现「界面显示 100% 但提交被拒」。

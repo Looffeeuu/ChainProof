@@ -156,7 +156,7 @@ const verdict = computed(() => {
           </dd>
         </div>
         <div>
-          <dt class="t-label">涵盖里程碑</dt>
+          <dt class="t-label">参与的里程碑</dt>
           <dd class="t-nums">
             {{ result.milestoneIds ? `${result.milestoneIds.length} 条` : '—' }}
           </dd>

@@ -9,7 +9,7 @@
  * 3. **错误照 spec/02 §2.6 的形状抛**，让页面的错误分支跑在和真接口一样的数据上。
  */
 import { projects, milestones, certificates } from './fixtures.js'
-import { largestRemainder } from '../utils/percentage.js'
+import { contributionShares, compareUtf8 } from '../utils/percentage.js'
 import { MAX_FILE_LABEL, isTooLarge } from '../utils/file-limit.js'
 
 const clone = (v) => JSON.parse(JSON.stringify(v))
@@ -156,25 +156,25 @@ export async function confirmMilestone(milestoneId, { memberId, decision }) {
   return clone(found)
 }
 
-/** 累计比例只统计已验证的里程碑——这条规则同时写在项目详情页的说明文字里 */
+/**
+ * 累计比例（docs/API.md §4，PR #9 定稿）。算法在 utils/percentage.js 的
+ * contributionShares，这里只负责挑出数据：项目全部成员、项目全部已验证里程碑。
+ *
+ * 返回**全部成员**，0% 的也在；按 memberId 字节序排列。页面想按比例排，自己排。
+ */
+function sharesOf(project) {
+  const verified = db.milestones.filter(
+    (m) => m.projectId === project.projectId && m.status === 'VERIFIED'
+  )
+  return { verified, members: contributionShares(project.members, verified) }
+}
+
 export async function getContributions(projectId) {
   await delay()
-  const verified = db.milestones.filter(
-    (m) => m.projectId === projectId && m.status === 'VERIFIED'
-  )
-  const totals = new Map()
-  for (const m of verified) {
-    for (const c of m.contributors) {
-      totals.set(c.memberId, (totals.get(c.memberId) ?? 0) + c.percentage)
-    }
-  }
-  const entries = [...totals.entries()].sort((a, b) => b[1] - a[1])
-  // 直接 Math.round 会得到 44 + 31 + 26 = 101 这种结果，用最大余数法保证和恰好是 100
-  const shares = largestRemainder(entries.map(([, value]) => value))
-  return {
-    members: entries.map(([memberId], i) => ({ memberId, percentage: shares[i] })),
-    basedOnMilestones: verified.length
-  }
+  const project = db.projects.find((p) => p.projectId === projectId)
+  if (!project) throw fail('PROJECT_NOT_FOUND', `没有找到项目 ${projectId}。`, 404)
+  const { verified, members } = sharesOf(project)
+  return { projectId, members, basedOnMilestones: verified.length }
 }
 
 export async function getCertificate(certificateId) {
@@ -196,53 +196,55 @@ export async function listCertificates({ projectId, memberId } = {}) {
   )
 }
 
+/** 两种「没有可证明的贡献」共用一句话，逐字照 docs/API.md §5 */
+const NO_CONTRIBUTION = '累计贡献比例为 0%，不能签发证书。'
+
 /**
- * 签发贡献证明（spec/03 §8.2、§8.3）。
+ * 签发贡献证明。检查顺序逐条照 docs/API.md §5（PR #9 定稿），**顺序本身就是规则**：
  *
- * 两个前置条件：这个人得是项目成员，项目里得至少有一条已验证的里程碑。
- * 前端据此决定按钮什么时候可以点，但这里仍然再判一次——
+ * 1. 这个人在这个项目已有证书 → 直接返回原证书，后面的都不查。
+ *    证书是签发那一刻的快照，之后比例怎么变都不影响它，也不会因此拿不回来。
+ * 2. 不是项目成员 → 拒绝。
+ * 3. 项目没有已验证里程碑 → 409 NO_VERIFIED_CONTRIBUTION。
+ * 4. 取整之后本人比例为 0 → 同上。判的是**取整后**的数，也就是面板上显示的那个，
+ *    所以「实际参与过、但分到 0%」的人同样不能签发。
+ *
+ * 前端据此决定按钮能不能点，这里仍然再判一次——
  * 页面判断失误时要能被接口拦住，而不是造出一张没有依据的证书。
- *
- * **幂等**：同一个 projectId + memberId 重复请求，返回已有的那张，
- * 不新签一张。所以演示时多点几次不会生出一堆重复证书。
  */
 export async function createCertificate(projectId, { memberId } = {}) {
   await delay()
   const project = db.projects.find((p) => p.projectId === projectId)
   if (!project) throw fail('PROJECT_NOT_FOUND', `没有找到项目 ${projectId}。`, 404)
 
-  if (!project.members.includes(memberId)) {
-    throw fail('MEMBER_NOT_IN_CLAIM', `${memberId} 不是项目 ${projectId} 的成员。`, 403)
-  }
-
   const existing = db.certificates.find(
     (c) => c.projectId === projectId && c.memberId === memberId
   )
   if (existing) return clone(existing)
 
-  const verified = db.milestones.filter(
-    (m) => m.projectId === projectId && m.status === 'VERIFIED'
-  )
-  if (verified.length === 0) {
-    // 用 VALIDATION_ERROR 而不是自己起一个码：docs/API.md 的错误码表里
-    // 没有给这种情况专门的码，普通参数校验失败一律归到它。
-    // 假接口要产出真接口会产出的东西，不然错误分支测的是一个不存在的情况。
-    throw fail(
-      'VALIDATION_ERROR',
-      '这个项目还没有任何一条里程碑通过全员确认，暂时不能签发贡献证明。'
-    )
+  if (!project.members.includes(memberId)) {
+    throw fail('MEMBER_NOT_IN_CLAIM', `${memberId} 不是项目 ${projectId} 的成员。`, 403)
   }
 
-  // 比例只按已验证的里程碑算，与贡献面板同一口径（spec/03 §8.4）
-  const { members } = await getContributions(projectId)
+  const { verified, members } = sharesOf(project)
   const share = members.find((m) => m.memberId === memberId)?.percentage ?? 0
+  if (verified.length === 0 || share === 0) {
+    throw fail('NO_VERIFIED_CONTRIBUTION', NO_CONTRIBUTION, 409)
+  }
+
+  // 只列他实际参与（percentage > 0）的那几条，按 createdAt、再按 milestoneId 正序。
+  // 条数一般少于 basedOnMilestones——比例按全部已验证的算，证书只列他参与的
+  const milestoneIds = verified
+    .filter((m) => m.contributors.some((c) => c.memberId === memberId && c.percentage > 0))
+    .sort((a, b) => compareUtf8(a.createdAt, b.createdAt) || compareUtf8(a.milestoneId, b.milestoneId))
+    .map((m) => m.milestoneId)
 
   const created = {
     certificateId: `CERT-${projectId}-${String(memberId).toUpperCase()}`,
     projectId,
     memberId,
     contributionPercentage: share,
-    milestoneIds: verified.map((m) => m.milestoneId),
+    milestoneIds,
     issuedAt: new Date().toISOString(),
     verificationStatus: 'VALID',
     txId: fakeTxId()

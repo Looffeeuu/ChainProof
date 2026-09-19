@@ -268,6 +268,94 @@ async function 超限文件当场拦下(page) {
 }
 
 /**
+ * 0% 成员看得到签发按钮，但按钮是灰的，旁边逐字写着接口的那句提示。
+ *
+ * 组长任务单的验收项：「0% 成员显示正常但不能签发证书」。假数据里没有现成的 0% 成员，
+ * 所以现场造一个：P003（alice、charlie）里提交一条只有 alice 的里程碑并确认，
+ * 然后**不刷新页面**切到 charlie——一刷新，内存里的假数据就还原了。
+ */
+async function 零贡献成员不能签发(page) {
+  // 先看 N = 0 的情况：一条已验证的都没有，按钮同样灰掉，但说的是另一个原因
+  await goAs(page, 'charlie', '/projects/P003', '.issue')
+  await page.evaluate(HELPERS)
+  const empty = JSON.parse(await page.evaluate(`JSON.stringify({
+    disabled: $btn('签发我的贡献证明')?.disabled ?? null,
+    why: $text('#issue-blocked'),
+    panel: $text('.empty')
+  })`))
+  assert('没有已验证里程碑时按钮在、但灰掉', empty.disabled === true, `disabled=${empty.disabled}`)
+  assert('没有已验证里程碑时说清原因', String(empty.why).includes('还没有任何一条里程碑'), empty.why)
+  assert('全员 0% 时面板说「还没有可统计的比例」，不画空横条',
+    String(empty.panel).includes('还没有可统计的贡献比例'), empty.panel)
+
+  await goAs(page, 'alice', '/projects/P003/milestones/new', 'form')
+  await page.evaluate(HELPERS)
+  const r = JSON.parse(await page.evaluate(`(async () => {
+    const title = document.querySelector('input[type=text]')
+    title.value = '只有 alice 的成果'
+    title.dispatchEvent(new Event('input', { bubbles: true }))
+
+    const fi = document.querySelector('input[type=file]')
+    fi.files = $file('a.txt', 1024)
+    fi.dispatchEvent(new Event('change', { bubbles: true }))
+
+    // P003 的成员顺序是 alice、charlie：alice 100，charlie 0
+    const nums = $$('.rows input[type=number]')
+    nums[0].value = 100
+    nums[0].dispatchEvent(new Event('input', { bubbles: true }))
+    await $wait(600)
+
+    $btn('提交并存证').click()
+    await $wait(1500)
+    const milestonePath = location.pathname
+
+    $btn('确认这份声明').click()
+    await $wait(1500)
+    const badge = $text('.badge')
+
+    // 应用内切身份，不刷新
+    document.querySelector('.trigger').click()
+    await $wait(200)
+    $$('.panel .row').find((row) => row.textContent.includes('charlie')).click()
+    await $wait(300)
+
+    // 应用内跳转：vue-router 听 popstate，不会整页重载
+    history.pushState({}, '', '/projects/P003')
+    dispatchEvent(new PopStateEvent('popstate'))
+    await $wait(1800)
+
+    const btn = $btn('签发我的贡献证明')
+    const rows = $$('.legend .row').map((row) => row.textContent.replace(/\\s+/g, ''))
+    const charlie = {
+      disabled: btn?.disabled ?? null,
+      why: $text('#issue-blocked'),
+      describedBy: btn?.getAttribute('aria-describedby') ?? null,
+      rows
+    }
+
+    document.querySelector('.trigger').click()
+    await $wait(200)
+    $$('.panel .row').find((row) => row.textContent.includes('alice')).click()
+    await $wait(1800)
+    const alice = {
+      disabled: $btn('签发我的贡献证明')?.disabled ?? null,
+      note: $text('.issue p')
+    }
+    return JSON.stringify({ milestonePath, badge, charlie, alice })
+  })()`))
+
+  assert('里程碑提交并确认成已验证', String(r.badge).includes('链上已验证'), `${r.milestonePath} · ${r.badge}`)
+  assert('0% 成员仍然出现在面板里', r.charlie.rows.some((x) => x.includes('charlie') && x.endsWith('0%')),
+    r.charlie.rows.join(' / '))
+  assert('0% 成员的签发按钮在、但灰掉', r.charlie.disabled === true, `disabled=${r.charlie.disabled}`)
+  assert('提示逐字照接口的那句话', r.charlie.why === '累计贡献比例为 0%，不能签发证书。', r.charlie.why)
+  assert('按钮用 aria-describedby 指向这句提示', r.charlie.describedBy === 'issue-blocked',
+    `aria-describedby=${r.charlie.describedBy}`)
+  assert('切回 alice（100%）按钮可以点', r.alice.disabled === false, `disabled=${r.alice.disabled}`)
+  assert('alice 看得到自己的比例', String(r.alice.note).includes('100%'), r.alice.note)
+}
+
+/**
  * 比例超过 100% 时，横条真的装不下。
  *
  * `.seg` 少一个 `flex-shrink: 0`，flex 就会把超出的部分按比例压回容器宽度，
@@ -487,6 +575,7 @@ const SCENARIOS = [
   ['建完项目侧栏跟上', 创建项目后侧栏跟上],
   ['取消哈希后不许提交', 取消哈希后不许提交],
   ['超限文件当场拦下', 超限文件当场拦下],
+  ['零贡献成员不能签发', 零贡献成员不能签发],
   ['比例超出时横条溢出', 比例超出时横条溢出],
   ['拒绝要二次确认', 拒绝要二次确认],
   ['确认之后有明确反馈', 确认之后有明确反馈],

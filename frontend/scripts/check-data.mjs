@@ -10,7 +10,7 @@
 import { projects, milestones, certificates } from '../src/mock/fixtures.js'
 import * as api from '../src/mock/handlers.js'
 import { useAsync } from '../src/composables/useAsync.js'
-import { largestRemainder, sumPercentages, clampPercentage } from '../src/utils/percentage.js'
+import { largestRemainder, sumPercentages, clampPercentage, contributionShares, compareUtf8 } from '../src/utils/percentage.js'
 import { truncateHash, groupHash } from '../src/utils/format-hash.js'
 import { confirmGate } from '../src/utils/confirm-gate.js'
 import { Sha256, sha256Bytes, hashFile, hasNativeDigest } from '../src/utils/sha256.js'
@@ -149,12 +149,15 @@ await check('里程碑按时间正序返回（spec/02 §5.1）', async () => {
   return list.map((m) => m.milestoneId).join(' → ')
 })
 
-await check('累计比例只算已验证的里程碑，且总和恰好 100', async () => {
-  const { members, basedOnMilestones } = await api.getContributions('P001')
-  const total = members.reduce((a, m) => a + m.percentage, 0)
-  assert(total === 100, `总和是 ${total}`)
-  assert(basedOnMilestones === 2, `统计了 ${basedOnMilestones} 条已验证里程碑，预期 2`)
-  return members.map((m) => `${m.memberId} ${m.percentage}%`).join(' · ')
+await check('累计比例只算已验证的里程碑，按契约取整，带 projectId、按 memberId 排', async () => {
+  const r = await api.getContributions('P001')
+  // M001 48/26/26 + M002 40/35/25，N = 2 → sum 88/61/51 → floor 44/30/25，余 0/1/1
+  // 差 1 个百分点，bob 与 charlie 余数平局，按字节序给 bob
+  const got = r.members.map((m) => `${m.memberId}=${m.percentage}`).join(' ')
+  assert(got === 'alice=44 bob=31 charlie=25', `得到 ${got}`)
+  assert(r.projectId === 'P001', `projectId 是 ${r.projectId}`)
+  assert(r.basedOnMilestones === 2, `统计了 ${r.basedOnMilestones} 条已验证里程碑，预期 2`)
+  return got
 })
 
 await check('确认后返回更新过的完整 Milestone，全员确认即转为 VERIFIED', async () => {
@@ -237,14 +240,23 @@ await check('签发证书要求成员属于该项目', async () => {
   }
 })
 
-await check('没有已验证里程碑时不能签发证书', async () => {
+await check('没有已验证里程碑时不能签发证书：409 NO_VERIFIED_CONTRIBUTION', async () => {
   try {
     await api.createCertificate('P003', { memberId: 'charlie' })  // P003 一条里程碑都没有
     throw new Error('本该被拒绝')
   } catch (e) {
-    assert(e.code === 'VALIDATION_ERROR', `code 是 ${e.code}`)
+    assert(e.code === 'NO_VERIFIED_CONTRIBUTION' && e.status === 409, `得到 ${e.code} / ${e.status}`)
+    assert(e.message === '累计贡献比例为 0%，不能签发证书。', `message 是「${e.message}」`)
     return `${e.code} / ${e.message}`
   }
+})
+
+await check('没有已验证里程碑时，贡献面板返回全体成员、全员 0', async () => {
+  const r = await api.getContributions('P003')
+  const got = r.members.map((m) => `${m.memberId}=${m.percentage}`).join(' ')
+  assert(got === 'alice=0 charlie=0', `得到 ${got}`)
+  assert(r.basedOnMilestones === 0, `basedOnMilestones 是 ${r.basedOnMilestones}`)
+  return got
 })
 
 await check('签发证书是幂等的：重复请求返回同一张，不新签', async () => {
@@ -569,6 +581,138 @@ await check('提交里程碑时，前端算出的哈希会被带进新建的里�
     `新建的里程碑 fileHash 是 ${JSON.stringify(created.fileHash)}，应为前端算出的那个`)
   assert(/^[0-9a-f]{64}$/.test(created.fileHash), 'fileHash 不是 64 位小写十六进制')
   return created.fileHash
+})
+
+// —— 累计比例与证书，PR #9 定稿（docs/API.md §4、§5）——
+
+const verifiedOf = (...claims) => claims.map((c) => ({
+  contributors: Object.entries(c).map(([memberId, percentage]) => ({ memberId, percentage }))
+}))
+const show = (rows) => rows.map((m) => `${m.memberId}=${m.percentage}`).join(' ')
+
+await check('判定用例：M1 alice 100%、M2 bob 100% → 50% / 50%（组长任务单点名）', () => {
+  const got = show(contributionShares(['alice', 'bob'], verifiedOf({ alice: 100 }, { bob: 100 })))
+  assert(got === 'alice=50 bob=50', `得到 ${got}`)
+  return got
+})
+
+await check('余数用整数比：199/3、100/3、1/3 三方平局，按字节序给 alice → 67/33/0', () => {
+  // 用浮点余数算，这三个数的小数部分互不相等，会给出 66/34/0——PR #9 评论里的例子
+  const got = show(contributionShares(['alice', 'bob', 'charlie'],
+    verifiedOf({ alice: 99, charlie: 1 }, { alice: 100 }, { bob: 100 })))
+  assert(got === 'alice=67 bob=33 charlie=0', `得到 ${got}`)
+  return got
+})
+
+await check('参与过但取整后为 0 的人，结果就是 0（资格按取整后判断）', () => {
+  const got = show(contributionShares(['alice', 'bob', 'charlie'],
+    verifiedOf({ alice: 99, charlie: 1 }, { bob: 100 })))
+  assert(got === 'alice=50 bob=50 charlie=0', `得到 ${got}`)
+  return got
+})
+
+await check('没参与任何一条的成员也在结果里，N = 0 时全员 0', () => {
+  const some = show(contributionShares(['dave', 'alice'], verifiedOf({ alice: 100 })))
+  assert(some === 'alice=100 dave=0', `得到 ${some}`)
+  const none = show(contributionShares(['bob', 'alice'], []))
+  assert(none === 'alice=0 bob=0', `N = 0 时得到 ${none}`)
+  return `${some}；N=0：${none}`
+})
+
+await check('随机 2000 组：总和恒为 100，与「整数 div/mod + 字节序」的独立实现逐一相同', () => {
+  // 独立写一遍，不复用被测代码，免得两边错成一样。字节序用 Node 的 Buffer.compare，
+  // 也就是 B 线在 PR #9 里建议链码用的那个
+  const byBytes = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b))
+  const reference = (ids, claims) => {
+    const n = claims.length
+    const rows = [...ids].sort(byBytes).map((id) => {
+      const sum = claims.reduce((a, c) => a + (c[id] ?? 0), 0)
+      return { id, q: Math.trunc(sum / n), r: sum % n }
+    })
+    let rest = 100 - rows.reduce((a, x) => a + x.q, 0)
+    for (const x of [...rows].sort((a, b) => b.r - a.r || byBytes(a.id, b.id))) {
+      if (rest-- > 0) x.q++
+    }
+    return rows.map((x) => `${x.id}=${x.q}`).join(' ')
+  }
+  // 后两个名字专门挑来区分字节序与 JS 的 <：一个带重音，一个在 BMP 之外
+  const people = ['alice', 'bob', 'charlie', 'dave', 'Émile', '\u{1F600}x']
+  for (let t = 0; t < 2000; t++) {
+    const ids = people.slice(0, 2 + (t % 5))
+    const claims = Array.from({ length: 1 + (t % 7) }, () => {
+      // 随机把 100 拆给随机几个人
+      const c = {}
+      let left = 100
+      for (let i = 0; i < ids.length - 1 && left > 0; i++) {
+        const v = Math.floor(Math.random() * (left + 1))
+        if (v) c[ids[i]] = v
+        left -= v
+      }
+      if (left) c[ids[ids.length - 1]] = left
+      return c
+    })
+    const got = contributionShares(ids, verifiedOf(...claims))
+    const total = got.reduce((a, m) => a + m.percentage, 0)
+    assert(total === 100, `第 ${t} 组总和是 ${total}`)
+    const want = reference(ids, claims)
+    assert(show(got) === want, `第 ${t} 组：得到 ${show(got)}，应为 ${want}`)
+  }
+  return '2000 组全部一致'
+})
+
+await check('compareUtf8 按 UTF-8 字节比，和 JS 的 < 在 BMP 外字符上结论相反', () => {
+  // U+FF5E 是 3 字节 EF BD 9E；U+1F600 是 4 字节 F0 9F 98 80。按 UTF-8 前者在前；
+  // 按 UTF-16 码元，U+1F600 的高位代理 D83D 小于 FF5E，JS 的 < 认为它在前
+  const wave = '～'
+  const face = '\u{1F600}'
+  assert(compareUtf8(wave, face) < 0, '字节序下 U+FF5E 应在 U+1F600 之前')
+  assert(face < wave, '（前提）JS 的 < 认为 U+1F600 在前')
+  assert(compareUtf8('bob', 'bob') === 0 && compareUtf8('ab', 'abc') < 0, '相等与前缀的情况不对')
+  return 'U+FF5E < U+1F600（字节序）'
+})
+
+await check('0% 成员：面板里有他，签发被 409 拒绝；参与者的证书只列自己参与的', async () => {
+  // P003 成员是 alice 与 charlie。提交一条只有 alice 的里程碑并确认，charlie 就是 0%
+  const m = await api.createMilestone('P003', {
+    title: '只有 alice 的成果', fileName: 'a.txt', fileHash: '0'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 100 }]
+  })
+  const done = await api.confirmMilestone(m.milestoneId, { memberId: 'alice', decision: 'CONFIRMED' })
+  assert(done.status === 'VERIFIED', `确认后是 ${done.status}`)
+
+  const r = await api.getContributions('P003')
+  assert(show(r.members) === 'alice=100 charlie=0', `面板是 ${show(r.members)}`)
+
+  let err = null
+  try { await api.createCertificate('P003', { memberId: 'charlie' }) } catch (e) { err = e }
+  assert(err?.code === 'NO_VERIFIED_CONTRIBUTION' && err.status === 409,
+    `charlie 签发得到 ${err ? `${err.code} / ${err.status}` : '一张证书'}`)
+
+  const cert = await api.createCertificate('P003', { memberId: 'alice' })
+  assert(JSON.stringify(cert.milestoneIds) === JSON.stringify([m.milestoneId]),
+    `alice 的 milestoneIds 是 ${JSON.stringify(cert.milestoneIds)}`)
+  assert(cert.contributionPercentage === 100, `比例是 ${cert.contributionPercentage}`)
+  return `charlie → ${err.code}；alice → ${cert.milestoneIds}`
+})
+
+await check('证书只列本人 percentage > 0 的已验证里程碑，按 createdAt 正序', async () => {
+  const cert = await api.createCertificate('P001', { memberId: 'charlie' })
+  const all = (await api.listMilestones('P001')).filter((x) => x.status === 'VERIFIED')
+  const mine = all.filter((x) => x.contributors.some((c) => c.memberId === 'charlie' && c.percentage > 0))
+  assert(JSON.stringify(cert.milestoneIds) === JSON.stringify(mine.map((x) => x.milestoneId)),
+    `得到 ${cert.milestoneIds}，应为 ${mine.map((x) => x.milestoneId)}`)
+  return cert.milestoneIds.join(' → ')
+})
+
+await check('先判幂等：已有证书原样返回，比例后来变了也不重算', async () => {
+  // CERT-P001-ALICE 签发时是 44%。前面的自检又让 P001 多了两条已验证里程碑
+  // （M004，以及 txId 那条只有 alice 的），alice 现在的累计比例已经不是 44
+  const now = (await api.getContributions('P001')).members.find((m) => m.memberId === 'alice').percentage
+  const cert = await api.createCertificate('P001', { memberId: 'alice' })
+  assert(cert.certificateId === 'CERT-P001-ALICE', `拿到的是 ${cert.certificateId}`)
+  assert(cert.contributionPercentage === 44, `比例被改成了 ${cert.contributionPercentage}`)
+  assert(now !== 44, `（前提）alice 现在的比例应当已经变了，实际是 ${now}`)
+  return `证书 44%，现在 ${now}%`
 })
 
 // —— 文件大小上限（utils/file-limit.js）——

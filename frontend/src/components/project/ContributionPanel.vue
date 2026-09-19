@@ -28,7 +28,9 @@ const rows = computed(() => asObjectList(props.members))
   <!-- 一条已验证的里程碑都没有时，比例是空的。这不是出错，也不是「暂无数据」，
        而是一个有原因的状态：还没有任何声明走完确认流程。说清楚它，
        用户才不会去怀疑是不是页面坏了。 -->
-  <div v-if="rows.length === 0" class="empty">
+  <!-- 判「有没有已验证里程碑」，不判 rows 是不是空的：接口返回项目全部成员，
+       一条都没验证时 members 是一排 0%，数组并不空（docs/API.md §4） -->
+  <div v-if="basedOnMilestones === 0 || rows.length === 0" class="empty">
     <p class="t-soft">还没有可统计的贡献比例。</p>
     <p class="t-small t-soft">里程碑通过全员确认后，这里会出现每人的累计占比。</p>
   </div>

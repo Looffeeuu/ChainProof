@@ -110,9 +110,8 @@ const SCHEMA = {
     txId: R.hex64
   },
   Contributions: {
-    // docs/API.md 的示例里带了它，前端不读，但契约里有就登记上，
-    // 免得「多了字段 projectId」每次都报一遍
-    projectId: opt(R.str),
+    // PR #9 定稿后是必有字段（组长任务单：Mock 返回 projectId）。前端不读它
+    projectId: R.str,
     members: { each: 'Share' },
     basedOnMilestones: R.int
   },

@@ -206,7 +206,7 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
                 {{ c.projectName }} · <span class="t-nums">{{ c.contributionPercentage }}%</span>
               </RouterLink>
               <p class="t-small t-soft t-nums">
-                涵盖 {{ c.milestoneIds.length }} 条里程碑 · 签发于 {{ formatDate(c.issuedAt) }}
+                参与 {{ c.milestoneIds.length }} 条里程碑 · 签发于 {{ formatDate(c.issuedAt) }}
               </p>
             </div>
             <StatusBadge :status="c.verificationStatus" />

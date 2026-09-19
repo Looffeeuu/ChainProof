@@ -56,23 +56,29 @@ watch(project, (p) => p && markVisited(p.projectId))
 const milestones = computed(() => data.value?.milestones ?? [])
 const newMilestonePath = computed(() => `/projects/${route.params.id}/milestones/new`)
 
-/* ——— 贡献证明（FE-16）———
+/**
+ * 累计比例的显示顺序：比例高的在前，同比例的保持接口给的 memberId 字节序。
+ * 接口按 memberId 排是为了三方结果可比对，不是为了给人看；
+ * 横条、清单、明细表共用这一份顺序，三处才对得上。
+ */
+const shares = computed(() =>
+  [...(data.value?.contributions?.members ?? [])].sort((a, b) => b.percentage - a.percentage)
+)
+const basedOn = computed(() => data.value?.contributions?.basedOnMilestones ?? 0)
+
+/* ——— 贡献证明 ———
  *
- * 签发条件由 C 线定死（spec/03 §8.2）：这个人得是项目成员，
- * 项目里得至少有一条已验证的里程碑。按钮什么时候能点，照这两条判断，
- * 而不是让人点了再被接口拒绝。
+ * 签发条件照 docs/API.md §5（PR #9 定稿）：是项目成员，且**取整后**的本人累计比例大于 0
+ * ——就是上面面板里显示的那个数。按钮能不能点照这个判断，不让人点了再被接口拒绝；
+ * 不能点时按钮仍然在，灰掉并说明原因（组长任务单的要求）。
  *
- * 接口是**幂等**的（§8.3）：同一个人重复请求会拿回已有的那张，不会签出第二张。
- * 所以这里不需要「先查有没有再决定调不调」，已经有证书时直接给个查看入口就行。
+ * 接口是**幂等**的，而且先判幂等：已有证书的人直接拿回原证书，不再检查资格。
+ * 所以已有证书时只给查看入口，不看比例。
  */
 const me = computed(() => session.currentMemberId)
 
 const myCertificate = computed(() =>
   (data.value?.certificates ?? []).find((c) => c.memberId === me.value)
-)
-
-const verifiedCount = computed(
-  () => milestones.value.filter((m) => m.status === 'VERIFIED').length
 )
 
 const isMember = computed(() => project.value?.members.includes(me.value) ?? false)
@@ -98,16 +104,20 @@ const tally = computed(() => {
   ]
 })
 
-const canIssue = computed(() => isMember.value && verifiedCount.value > 0)
+const myShare = computed(() => shares.value.find((m) => m.memberId === me.value)?.percentage ?? 0)
 
-/** 不能签发时的原因。按钮不出现，就要说清为什么不出现 */
+/** 不能签发的原因；空串表示能签发 */
 const issueBlockedReason = computed(() => {
   if (!isMember.value) return '你不是这个项目的成员，不能在这里签发贡献证明。'
-  if (verifiedCount.value === 0) {
+  if (basedOn.value === 0) {
     return '这个项目还没有任何一条里程碑通过全员确认。至少有一条之后，才能签发贡献证明。'
   }
+  // 逐字照接口的 NO_VERIFIED_CONTRIBUTION 提示，页面与接口说同一句话
+  if (myShare.value === 0) return '累计贡献比例为 0%，不能签发证书。'
   return ''
 })
+
+const canIssue = computed(() => issueBlockedReason.value === '')
 
 const issuing = ref(false)
 const issueError = ref(null)
@@ -189,20 +199,14 @@ async function issueCertificate() {
       <div class="columns">
         <BaseCard class="col">
           <template #title><h2>累计贡献比例</h2></template>
-          <ContributionPanel
-            :members="data.contributions.members"
-            :based-on-milestones="data.contributions.basedOnMilestones"
-          />
+          <ContributionPanel :members="shares" :based-on-milestones="basedOn" />
 
           <!-- <details> 是原生的折叠块：不用写任何 JavaScript，
                键盘和读屏都直接支持，展开状态还能被浏览器的页内查找唤起 -->
-          <details v-if="data.contributions.members.length" class="detail">
+          <details v-if="basedOn > 0" class="detail">
             <summary class="t-small">按里程碑查看</summary>
             <div class="table-wrap">
-              <ContributionBreakdown
-                :milestones="milestones"
-                :members="data.contributions.members"
-              />
+              <ContributionBreakdown :milestones="milestones" :members="shares" />
             </div>
 
           </details>
@@ -220,14 +224,21 @@ async function issueCertificate() {
               </BaseButton>
             </template>
 
-            <template v-else-if="canIssue">
-              <p class="t-small t-soft t-nums">已有 {{ verifiedCount }} 条里程碑通过全员确认。</p>
-              <BaseButton :loading="issuing" loading-text="签发中…" @click="issueCertificate">
+            <template v-else>
+              <p v-if="canIssue" class="t-small t-soft t-nums">
+                你的累计贡献比例是 {{ myShare }}%，签发后以这个数为准，之后的变化不影响证书。
+              </p>
+              <p v-else id="issue-blocked" class="t-small t-soft">{{ issueBlockedReason }}</p>
+              <BaseButton
+                :disabled="!canIssue"
+                :loading="issuing"
+                loading-text="签发中…"
+                :aria-describedby="canIssue ? undefined : 'issue-blocked'"
+                @click="issueCertificate"
+              >
                 签发我的贡献证明
               </BaseButton>
             </template>
-
-            <p v-else class="t-small t-soft">{{ issueBlockedReason }}</p>
           </div>
         </BaseCard>
 
