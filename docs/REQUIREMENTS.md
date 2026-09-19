@@ -106,17 +106,17 @@ MVP 采用“链下托管 + 前后端双算 SHA-256”的方案：
 ### FR-08 贡献统计面板
 用户可以查看成员累计贡献比例、参与里程碑数量等统计信息。累计比例只基于 `VERIFIED` 里程碑，并返回 `basedOnMilestones` 表示统计依据的已验证里程碑数量。
 
-每条已验证里程碑权重相同。成员累计比例等于其在全部已验证里程碑中的 percentage 总和除以已验证里程碑数量；未参与某条里程碑时按 0 计算。最终使用最大余数法生成总和严格为 100 的整数结果，余数相同时按 `memberId` 升序分配。结果包含项目全部成员，包括 0% 成员，并按 `memberId` 升序排列；没有已验证里程碑时全员为 0。
+每条已验证里程碑权重相同。设其数量为 `N = basedOnMilestones`，对项目全部成员分别求其在这些里程碑中的整数 `percentage` 总和 `sum`；未参与某条时按 0 计算。当 `N > 0` 时，使用整数 `floor = sum div N` 和 `remainder = sum mod N`，按最大余数法分配 `100 - Σfloor` 个剩余百分点，使最终整数结果总和严格为 100；不得用浮点除法或浮点余数比较。余数相同时按 `memberId` 的 UTF-8 无符号字节序升序分配，不使用 `localeCompare()` 或本地化排序。结果包含项目全部成员，包括 0% 成员，并按同一字节序排列；`N = 0` 时全员为 0。
 
 ### FR-09 贡献证明生成
-满足以下条件时可以为成员生成贡献证明：
-- 该成员属于项目；
-- 项目至少存在 1 条 `VERIFIED` 里程碑；
-- 该成员累计 `contributionPercentage` 大于 0。
+签发按以下顺序处理：
 
-0% 成员仍显示在 Contribution Dashboard 中，但不签发贡献证明。证明中的 `milestoneIds` 只包含该成员实际参与（contributors 中 `percentage > 0`）的 `VERIFIED` milestone ID，并按 `createdAt`、`milestoneId` 正序排列。
+1. 先按 `projectId + memberId` 检查已有证明；如存在，直接返回原证明，不重新检查资格，也不重复签发新的 `certificateId`。
+2. 尚无证明时，检查该成员属于项目。
+3. 项目没有 `VERIFIED` 里程碑时，返回 HTTP 409 + `NO_VERIFIED_CONTRIBUTION`。
+4. 以 FR-08 最大余数法完成后的最终整数 `contributionPercentage`（即 Dashboard 显示的 `members[].percentage`）判断资格；最终为 0 时同样返回 HTTP 409 + `NO_VERIFIED_CONTRIBUTION`，只有大于 0 才签发。两种失败情况的中文提示均为「累计贡献比例为 0%，不能签发证书。」
 
-同一 `projectId + memberId` 重复请求生成时，返回已有证明，不重复签发新的 certificateId。
+0% 成员仍显示在 Contribution Dashboard 中。证明中的 `milestoneIds` 只包含该成员实际参与（contributors 中 `percentage > 0`）的 `VERIFIED` milestone ID，并按 `createdAt`、`milestoneId` 正序排列。项目全部已验证里程碑数 `basedOnMilestones` 与 `Certificate.milestoneIds.length` 不要求相等。
 
 ### FR-10 贡献证明验证
 外部验证者可以输入 certificateId，验证其对应记录。证书不存在时属于有效验证结果，应返回 `verificationStatus: NOT_FOUND`，而不是通用 404 错误。
