@@ -322,6 +322,90 @@ describe('ChainProofContract - GetProjectContributions', () => {
     expect(sum).toBe(100)
   })
 
+  test('成员列表按 UTF-8 字节序排列，而非 localeCompare', async () => {
+    // localeCompare 在多数 locale 下忽略大小写，会把 'a' 排在 'B' 前面；
+    // Buffer.compare 按 UTF-8 字节值比较：'B'(0x42) < 'a'(0x61)。
+    // 若实现误用 localeCompare，排序结果会不同。
+    await contract.CreateProject(ctx, 'P_UTF8', 'utf8 sort', 'd', 'alice',
+      JSON.stringify(['alice', 'B', 'a']))
+
+    ctx.stub.setTimestamp('2026-09-25T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_UTF8', 'P_UTF8', 'only alice', 'd', 'a.zip', HASH_A,
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M_UTF8', 'alice', 'CONFIRMED')
+
+    const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P_UTF8'))
+    expect(result.members.map((m) => m.memberId)).toEqual(['B', 'a', 'alice'])
+  })
+
+  test('三人余数相同（1/3 平局）时按 UTF-8 字节序分配唯一 +1', async () => {
+    // 3 成员 ['B', 'C', 'a']，3 个 VERIFIED 里程碑。
+    // 构造使全部 sum ≡ 1 (mod 3)，remaining = 1，形成三路平局。
+    //
+    //   M1: B=1  C=1  a=98
+    //   M2: B=1  C=1  a=98
+    //   M3: B=2  C=2  a=96
+    //   sum: B=4  C=4  a=292
+    //   floor(÷3): B=1  C=1  a=97  → floorSum = 99, remaining = 1
+    //   remainder: B=1  C=1  a=1   → 三路平局
+    //
+    // UTF-8 字节序：'B'(0x42) < 'C'(0x43) < 'a'(0x61) → B 获 +1 → B=2
+    // localeCompare（忽略大小写）：'a' < 'B' < 'C'       → a 获 +1 → a=98
+    await contract.CreateProject(ctx, 'P_1OF3', '1/3 tie utf8', 'd', 'B',
+      JSON.stringify(['B', 'C', 'a']))
+
+    ctx.stub.setTimestamp('2026-09-26T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_1OF3_1', 'P_1OF3', 'first', 'd', 'a.zip', HASH_A,
+      JSON.stringify([
+        { memberId: 'B', percentage: 1 },
+        { memberId: 'C', percentage: 1 },
+        { memberId: 'a', percentage: 98 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M_1OF3_1', 'B', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_1OF3_1', 'C', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_1OF3_1', 'a', 'CONFIRMED')
+
+    ctx.stub.setTimestamp('2026-09-27T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_1OF3_2', 'P_1OF3', 'second', 'd', 'b.zip', HASH_B,
+      JSON.stringify([
+        { memberId: 'B', percentage: 1 },
+        { memberId: 'C', percentage: 1 },
+        { memberId: 'a', percentage: 98 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M_1OF3_2', 'B', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_1OF3_2', 'C', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_1OF3_2', 'a', 'CONFIRMED')
+
+    ctx.stub.setTimestamp('2026-09-28T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_1OF3_3', 'P_1OF3', 'third', 'd', 'c.zip', HASH_C,
+      JSON.stringify([
+        { memberId: 'B', percentage: 2 },
+        { memberId: 'C', percentage: 2 },
+        { memberId: 'a', percentage: 96 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M_1OF3_3', 'B', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_1OF3_3', 'C', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_1OF3_3', 'a', 'CONFIRMED')
+
+    const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P_1OF3'))
+    const byMember = Object.fromEntries(result.members.map((m) => [m.memberId, m.percentage]))
+
+    expect(byMember.B).toBe(2)
+    expect(byMember.C).toBe(1)
+    expect(byMember.a).toBe(97)
+
+    const sum = result.members.reduce((s, m) => s + m.percentage, 0)
+    expect(sum).toBe(100)
+  })
+
   test('返回项目全部成员，包括 0% 成员', async () => {
     // P001 成员为 alice, bob, charlie；M001 VERIFIED 中三人都有贡献
     // 新增一个项目，其中一名成员从不参与任何 VERIFIED 里程碑
@@ -559,43 +643,39 @@ describe('ChainProofContract - Certificate', () => {
       .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: 累计贡献比例为 0%，不能签发证书。$/)
   })
 
-  test('成员贡献经最大余数法取整后为 0% -> NO_VERIFIED_CONTRIBUTION', async () => {
-    // 构造一个项目：3 个 VERIFIED 里程碑，某成员贡献极小，取整后为 0
+  test('参与后取整为 0%', async () => {
+    // charlie 实际参与 M1（贡献 1%），但经 Hamilton 取整后为 0%
+    // N=2: alice sum=99 floor=49 r=1, bob sum=100 floor=50 r=0, charlie sum=1 floor=0 r=1
+    // floorSum=99, remaining=1, 余数最大者 alice(1) 获 +1
+    // 最终：alice=50, bob=50, charlie=0
     await contract.CreateProject(ctx, 'P005', 'rounding to zero', 'd', 'alice',
-      JSON.stringify(['alice', 'bob', 'tiny']))
+      JSON.stringify(['alice', 'bob', 'charlie']))
+
     ctx.stub.setTimestamp('2026-09-18T10:00:00.000Z')
     await contract.CreateMilestone(
-      ctx, 'M030', 'P005', 'first', 'd', 'a.zip', HASH_A,
-      JSON.stringify([{ memberId: 'alice', percentage: 98 }, { memberId: 'bob', percentage: 2 }])
+      ctx, 'M030', 'P005', 'alice and charlie', 'd', 'a.zip', HASH_A,
+      JSON.stringify([{ memberId: 'alice', percentage: 99 }, { memberId: 'charlie', percentage: 1 }])
     )
     await contract.ConfirmContribution(ctx, 'M030', 'alice', 'CONFIRMED')
-    await contract.ConfirmContribution(ctx, 'M030', 'bob', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M030', 'charlie', 'CONFIRMED')
 
     ctx.stub.setTimestamp('2026-09-19T10:00:00.000Z')
     await contract.CreateMilestone(
-      ctx, 'M031', 'P005', 'second', 'd', 'b.zip', HASH_B,
-      JSON.stringify([{ memberId: 'alice', percentage: 98 }, { memberId: 'bob', percentage: 2 }])
+      ctx, 'M031', 'P005', 'only bob', 'd', 'b.zip', HASH_B,
+      JSON.stringify([{ memberId: 'bob', percentage: 100 }])
     )
-    await contract.ConfirmContribution(ctx, 'M031', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M031', 'bob', 'CONFIRMED')
 
-    ctx.stub.setTimestamp('2026-09-20T10:00:00.000Z')
-    await contract.CreateMilestone(
-      ctx, 'M032', 'P005', 'third', 'd', 'c.zip', HASH_C,
-      JSON.stringify([{ memberId: 'alice', percentage: 98 }, { memberId: 'bob', percentage: 2 }])
-    )
-    await contract.ConfirmContribution(ctx, 'M032', 'alice', 'CONFIRMED')
-    await contract.ConfirmContribution(ctx, 'M032', 'bob', 'CONFIRMED')
-
-    // tiny 是项目成员但从未参与任何 VERIFIED 里程碑，累计贡献为 0%
-    ctx.stub.nextTransaction('tx-issue-tiny')
-    await expect(contract.IssueCertificate(ctx, 'CP-030', 'P005', 'tiny'))
-      .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: 累计贡献比例为 0%，不能签发证书。$/)
-
-    // 验证 GetProjectContributions 中 tiny 的 percentage 为 0
     const contributions = JSON.parse(await contract.GetProjectContributions(ctx, 'P005'))
-    const tinyMember = contributions.members.find((m) => m.memberId === 'tiny')
-    expect(tinyMember.percentage).toBe(0)
+    const byMember = Object.fromEntries(contributions.members.map((m) => [m.memberId, m.percentage]))
+    expect(byMember.alice).toBe(50)
+    expect(byMember.bob).toBe(50)
+    expect(byMember.charlie).toBe(0)
+
+    // charlie 实际参与了 M030 且贡献 1%，但取整后为 0%，拒绝签发
+    ctx.stub.nextTransaction('tx-issue-charlie-zero')
+    await expect(contract.IssueCertificate(ctx, 'CP-030', 'P005', 'charlie'))
+      .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: 累计贡献比例为 0%，不能签发证书。$/)
   })
 
   test('缺参数 -> VALIDATION_ERROR', async () => {
