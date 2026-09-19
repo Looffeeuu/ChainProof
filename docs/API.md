@@ -166,9 +166,10 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 
 1. `basedOnMilestones = N`，其中 `N` 是项目中 `VERIFIED` milestone 的数量。
 2. 对项目中的每个成员，把该成员在全部 `VERIFIED` milestones 中的 `percentage` 相加；未出现在某条 milestone 的成员在该条记录中按 `0` 计算。
-3. 精确累计比例为 `sum(member percentages) / N`。由于每条 milestone 的比例总和都是 100，所有成员的精确累计比例总和也必然是 100。
-4. API 只返回整数，因此使用最大余数法取整到总和严格等于 100；小数余数相同时按 `memberId` 升序分配，保证 Fabric 背书节点结果确定。
-5. `members` 必须包含项目的全部成员；没有参与任何已验证 milestone 的成员返回 `percentage: 0`。返回数组按 `memberId` 升序排列。
+3. 对每个项目成员计算整数 `sum`：其在全部 `VERIFIED` milestones 中的 `percentage` 之和；未参与某条时该条计 0。每条 milestone 的比例总和均为 100，因此所有成员的 `sum` 总和为 `100 × N`。
+4. 当 `N > 0` 时，仅用整数运算计算 `floor = sum div N`、`remainder = sum mod N`（`div` 为整数除法，`mod` 为整数取余）；精确比例在数学上为 `sum / N`，实现不得用浮点除法或浮点余数比较。
+5. 先给每位成员分配 `floor`，再计算 `remaining = 100 - Σfloor`；按 `remainder` 降序，余数相同按 `memberId` 的 UTF-8 无符号字节序升序，给前 `remaining` 位各加 1。最终 `members[].percentage` 均为整数且总和严格等于 100。
+6. `members` 必须包含项目全部成员；没有参与任何已验证 milestone 的成员返回 `percentage: 0`。返回数组也按 `memberId` 的 UTF-8 无符号字节序升序排列。比较规则固定，不使用 `localeCompare()` 或依赖运行环境的本地化排序。
 
 项目尚无 `VERIFIED` milestone 时，返回全部项目成员且比例均为 `0`，同时 `basedOnMilestones: 0`。
 
@@ -206,16 +207,16 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 }
 ```
 
-生成条件：
-- member 属于该项目；
-- 项目至少有 1 条 `VERIFIED` milestone；
-- 该成员的累计 `contributionPercentage` 必须大于 `0`。
+签发按以下顺序处理：
 
-0% 成员仍必须显示在 Contribution Dashboard 中，但不能生成证书；后端返回 HTTP 409 + `NO_VERIFIED_CONTRIBUTION`。
+1. 先按 `projectId + memberId` 查询已有 Certificate；若存在，直接返回原证书，不重新检查成员资格、已验证里程碑数量或累计比例，也不生成新的 `certificateId`。
+2. 若尚无证书，检查成员属于该项目。
+3. 若项目没有 `VERIFIED` milestone，返回 HTTP 409 + `NO_VERIFIED_CONTRIBUTION`。
+4. 按上述最大余数法完成全部成员的整数分配后，以 Dashboard 返回的最终 `members[].percentage` 作为该成员的 `contributionPercentage`。若最终值为 `0`，同样返回 HTTP 409 + `NO_VERIFIED_CONTRIBUTION`；只有最终值大于 `0` 才签发。
 
-`milestoneIds` 只保存该成员实际参与的 `VERIFIED` milestone ID：即该成员在该 milestone 的 contributors 中且 `percentage > 0`。数组按 milestone 的 `createdAt` 正序排列，时间相同时按 `milestoneId` 升序排列。
+两种 `NO_VERIFIED_CONTRIBUTION` 情况的中文 `message` 统一为「累计贡献比例为 0%，不能签发证书。」0% 成员仍显示在 Contribution Dashboard 中。判断不得使用取整前的精确比例；例如成员实际参与了某条 milestone，但最终分配结果为 0%，仍不能签发。
 
-同一 `projectId + memberId` 重复生成时返回已有证书，不重复产生新的 certificateId。
+`milestoneIds` 只保存该成员实际参与的 `VERIFIED` milestone ID：即该成员在该 milestone 的 contributors 中且 `percentage > 0`。数组按 milestone 的 `createdAt` 正序排列，时间相同时按 `milestoneId` 升序排列。Dashboard 的 `basedOnMilestones` 是项目全部 `VERIFIED` milestone 数量；`Certificate.milestoneIds.length` 只统计该成员实际参与的数量，二者不要求相等。
 
 返回完整 `Certificate`。
 
@@ -286,7 +287,7 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 - `projectId: string`
 - `memberId: string`
 - `contributionPercentage: number`
-- `milestoneIds: string[]`（该成员实际参与的 VERIFIED milestone ID 快照）
+- `milestoneIds: string[]`（该成员实际参与且 `percentage > 0` 的 VERIFIED milestone ID 快照；长度不要求等于 Dashboard 的 `basedOnMilestones`）
 - `issuedAt: ISO 8601 string`
 - `verificationStatus: string`
 - `txId: string`
@@ -323,7 +324,7 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 | `ALREADY_DECIDED` | 409 | 当前成员已经表态 |
 | `MILESTONE_CLOSED` | 409 | milestone 已 VERIFIED / REJECTED |
 | `FILE_HASH_MISMATCH` | 400 | 前后端文件哈希不一致 |
-| `NO_VERIFIED_CONTRIBUTION` | 409 | 成员累计已验证贡献为 0，不能签发证书 |
+| `NO_VERIFIED_CONTRIBUTION` | 409 | 无 VERIFIED milestone，或最终整数累计贡献为 0；message：累计贡献比例为 0%，不能签发证书。 |
 | `VALIDATION_ERROR` | 400 | 普通参数校验失败 |
 | `INTERNAL_ERROR` | 500 | 未分类服务端错误 |
 
