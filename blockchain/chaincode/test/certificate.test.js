@@ -165,9 +165,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
     expect(sum).not.toBe(101)
   })
 
-  test('成员参与里程碑数量不同时，总和可能不是 100 但必须等于精确平均之和的取整', async () => {
-    // bob 只参与 M001（31），alice/charlie 参与 M001 与 M004。
-    // 此时精确平均之和 != 100，属正常业务结果，但取整仍须与 Math.round(精确和) 一致。
+  test('成员参与里程碑数量不同时，未参与的里程碑按 0 计算，总和严格为 100', async () => {
+    // bob 只参与 M001（31），alice/charlie 参与 M001 与 M005。
+    // 新契约口径：分母为全部 VERIFIED 里程碑总数 N = 2，bob 未参与 M005 按 0 计算。
     ctx.stub.setTimestamp('2026-09-17T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M005', 'P001', 'uneven', 'd', 'u.zip', HASH_C,
@@ -182,21 +182,30 @@ describe('ChainProofContract - GetProjectContributions', () => {
     const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P001'))
     const byMember = Object.fromEntries(result.members.map((m) => [m.memberId, m.percentage]))
 
-    // alice (42+70)/2 = 56，bob 31（仅 M001），charlie (27+30)/2 = 28.5
+    // alice (42+70)/2 = 56，bob (31+0)/2 = 15.5，charlie (27+30)/2 = 28.5
+    // 精确和 = 56 + 15.5 + 28.5 = 100，取整后总和严格为 100
     expect(byMember.alice).toBe(56)
-    expect(byMember.bob).toBe(31)
-    // 精确和 = 56 + 31 + 28.5 = 115.5 -> targetSum 116
+    // bob 与 charlie 余数同为 0.5，按 memberId 升序 bob 先获得 +1
+    expect(byMember.bob).toBe(16)
+    expect(byMember.charlie).toBe(28)
     const sum = result.members.reduce((s, m) => s + m.percentage, 0)
-    expect(sum).toBe(116)
-    expect(Number.isInteger(byMember.charlie)).toBe(true)
+    expect(sum).toBe(100)
   })
 
-  test('没有 VERIFIED 里程碑时返回空 members 与 basedOnMilestones 0', async () => {
+  test('没有 VERIFIED 里程碑时返回全员 0 与 basedOnMilestones 0', async () => {
     const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P002'))
-    expect(result).toEqual({ projectId: 'P002', members: [], basedOnMilestones: 0 })
+    // P002 成员为 ['bob', 'charlie']，无 VERIFIED 里程碑，全员返回 0
+    expect(result).toEqual({
+      projectId: 'P002',
+      members: [
+        { memberId: 'bob', percentage: 0 },
+        { memberId: 'charlie', percentage: 0 }
+      ],
+      basedOnMilestones: 0
+    })
   })
 
-  test('只统计 VERIFIED：仅有 PENDING 与 REJECTED 的项目结果为空', async () => {
+  test('只统计 VERIFIED：仅有 PENDING 与 REJECTED 的项目返回全员 0', async () => {
     await contract.CreateProject(ctx, 'P003', 'mixed', 'd', 'alice', JSON.stringify(['alice', 'bob']))
     ctx.stub.setTimestamp('2026-09-15T10:00:00.000Z')
     await contract.CreateMilestone(
@@ -212,7 +221,11 @@ describe('ChainProofContract - GetProjectContributions', () => {
 
     const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P003'))
     expect(result.basedOnMilestones).toBe(0)
-    expect(result.members).toEqual([])
+    // 全员返回 0%
+    expect(result.members).toEqual([
+      { memberId: 'alice', percentage: 0 },
+      { memberId: 'bob', percentage: 0 }
+    ])
   })
 
   test('项目不存在 -> PROJECT_NOT_FOUND', async () => {
@@ -224,6 +237,119 @@ describe('ChainProofContract - GetProjectContributions', () => {
     await contract.GetProjectContributions(ctx, 'P001')
     const after = JSON.parse(await contract.GetMilestone(ctx, 'M001'))
     expect(after).toEqual(before)
+  })
+
+  test('50%/50% 判定用例：M1 只有 alice 100%，M2 只有 bob 100%，最终必须为 50%/50%', async () => {
+    // 这是 PR #9 特意写进文档的反例，验证等权分母为全部 VERIFIED 总数 N
+    await contract.CreateProject(ctx, 'P050', 'fifty-fifty', 'd', 'alice',
+      JSON.stringify(['alice', 'bob']))
+
+    ctx.stub.setTimestamp('2026-09-20T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M050', 'P050', 'only alice', 'd', 'a.zip', HASH_A,
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M050', 'alice', 'CONFIRMED')
+
+    ctx.stub.setTimestamp('2026-09-21T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M051', 'P050', 'only bob', 'd', 'b.zip', HASH_B,
+      JSON.stringify([{ memberId: 'bob', percentage: 100 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M051', 'bob', 'CONFIRMED')
+
+    const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P050'))
+
+    // N = 2，alice = (100+0)/2 = 50，bob = (0+100)/2 = 50
+    expect(result.basedOnMilestones).toBe(2)
+    const byMember = Object.fromEntries(result.members.map((m) => [m.memberId, m.percentage]))
+    expect(byMember.alice).toBe(50)
+    expect(byMember.bob).toBe(50)
+
+    const sum = result.members.reduce((s, m) => s + m.percentage, 0)
+    expect(sum).toBe(100)
+  })
+
+  test('最大余数法平局用例：四人同余数 0.5，按 memberId 升序分配 +1', async () => {
+    // 4 个成员，精确平均都是 25.5，向下取整总和 = 100 - 2 = 98，剩余 2 个 +1
+    // 按 memberId 升序：alice、bob 获得 +1
+    await contract.CreateProject(ctx, 'P_TIE', 'tie-break', 'd', 'alice',
+      JSON.stringify(['alice', 'bob', 'charlie', 'dave']))
+
+    ctx.stub.setTimestamp('2026-09-22T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_TIE1', 'P_TIE', 'first', 'd', 'a.zip', HASH_A,
+      JSON.stringify([
+        { memberId: 'alice', percentage: 25 },
+        { memberId: 'bob', percentage: 25 },
+        { memberId: 'charlie', percentage: 25 },
+        { memberId: 'dave', percentage: 25 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M_TIE1', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_TIE1', 'bob', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_TIE1', 'charlie', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_TIE1', 'dave', 'CONFIRMED')
+
+    ctx.stub.setTimestamp('2026-09-23T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_TIE2', 'P_TIE', 'second', 'd', 'b.zip', HASH_B,
+      JSON.stringify([
+        { memberId: 'alice', percentage: 26 },
+        { memberId: 'bob', percentage: 26 },
+        { memberId: 'charlie', percentage: 24 },
+        { memberId: 'dave', percentage: 24 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M_TIE2', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_TIE2', 'bob', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_TIE2', 'charlie', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_TIE2', 'dave', 'CONFIRMED')
+
+    const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P_TIE'))
+    const byMember = Object.fromEntries(result.members.map((m) => [m.memberId, m.percentage]))
+
+    // 精确平均：alice = (25+26)/2 = 25.5, bob = 25.5, charlie = 24.5, dave = 24.5
+    // floor: 25+25+24+24 = 98，剩余 2
+    // 余数排序：alice 0.5, bob 0.5, charlie 0.5, dave 0.5（全部相同）
+    // 按 memberId 升序取前 2 个：alice, bob 各 +1
+    expect(byMember.alice).toBe(26)
+    expect(byMember.bob).toBe(26)
+    expect(byMember.charlie).toBe(24)
+    expect(byMember.dave).toBe(24)
+
+    const sum = result.members.reduce((s, m) => s + m.percentage, 0)
+    expect(sum).toBe(100)
+  })
+
+  test('返回项目全部成员，包括 0% 成员', async () => {
+    // P001 成员为 alice, bob, charlie；M001 VERIFIED 中三人都有贡献
+    // 新增一个项目，其中一名成员从不参与任何 VERIFIED 里程碑
+    await contract.CreateProject(ctx, 'P_ZERO', 'with zero member', 'd', 'alice',
+      JSON.stringify(['alice', 'bob', 'zero-member']))
+
+    ctx.stub.setTimestamp('2026-09-24T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_ZERO1', 'P_ZERO', 'only alice and bob', 'd', 'a.zip', HASH_A,
+      JSON.stringify([
+        { memberId: 'alice', percentage: 60 },
+        { memberId: 'bob', percentage: 40 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M_ZERO1', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_ZERO1', 'bob', 'CONFIRMED')
+
+    const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P_ZERO'))
+
+    // zero-member 必须出现在结果中，percentage = 0
+    expect(result.members).toHaveLength(3)
+    const byMember = Object.fromEntries(result.members.map((m) => [m.memberId, m.percentage]))
+    expect(byMember['zero-member']).toBe(0)
+    expect(byMember.alice).toBe(60)
+    expect(byMember.bob).toBe(40)
+
+    const sum = result.members.reduce((s, m) => s + m.percentage, 0)
+    expect(sum).toBe(100)
   })
 })
 
@@ -262,6 +388,77 @@ describe('ChainProofContract - Certificate', () => {
 
     expect(certificate.milestoneIds).toEqual(['M001'])
     expect(certificate.contributionPercentage).toBe(31)
+  })
+
+  test('milestoneIds 按 createdAt 正序、时间相同再按 milestoneId 升序', async () => {
+    // 构造多个 VERIFIED 里程碑，验证排序规则
+    await contract.CreateProject(ctx, 'P_SORT', 'sort test', 'd', 'alice',
+      JSON.stringify(['alice']))
+
+    // 同一时间戳创建两个里程碑，验证 milestoneId 作为次级排序键
+    ctx.stub.setTimestamp('2026-09-25T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_SORT_B', 'P_SORT', 'second by id', 'd', 'b.zip', HASH_B,
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M_SORT_B', 'alice', 'CONFIRMED')
+
+    // 更早的时间戳，应该排在前面
+    ctx.stub.setTimestamp('2026-09-24T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_SORT_A', 'P_SORT', 'first by time', 'd', 'a.zip', HASH_A,
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M_SORT_A', 'alice', 'CONFIRMED')
+
+    // 与 M_SORT_B 相同时间戳，但 milestoneId 更大
+    ctx.stub.setTimestamp('2026-09-25T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_SORT_C', 'P_SORT', 'same time later id', 'd', 'c.zip', HASH_C,
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M_SORT_C', 'alice', 'CONFIRMED')
+
+    ctx.stub.nextTransaction('tx-issue-sort')
+    const certificate = JSON.parse(await contract.IssueCertificate(ctx, 'CP-SORT', 'P_SORT', 'alice'))
+
+    // 期望排序：M_SORT_A (2026-09-24) < M_SORT_B (2026-09-25, id=B) < M_SORT_C (2026-09-25, id=C)
+    expect(certificate.milestoneIds).toEqual(['M_SORT_A', 'M_SORT_B', 'M_SORT_C'])
+  })
+
+  test('milestoneIds 过滤掉 percentage = 0 的贡献记录', async () => {
+    // 成员在某个 VERIFIED 里程碑中 percentage = 0 时，该里程碑不应出现在证书中
+    await contract.CreateProject(ctx, 'P_FILTER', 'filter test', 'd', 'alice',
+      JSON.stringify(['alice', 'bob']))
+
+    ctx.stub.setTimestamp('2026-09-26T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_FILTER1', 'P_FILTER', 'alice 100%', 'd', 'a.zip', HASH_A,
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+    )
+    await contract.ConfirmContribution(ctx, 'M_FILTER1', 'alice', 'CONFIRMED')
+
+    // bob 在这个里程碑中 percentage = 0（alice 100%，bob 0%）
+    ctx.stub.setTimestamp('2026-09-27T10:00:00.000Z')
+    await contract.CreateMilestone(
+      ctx, 'M_FILTER2', 'P_FILTER', 'bob 0%', 'd', 'b.zip', HASH_B,
+      JSON.stringify([
+        { memberId: 'alice', percentage: 100 },
+        { memberId: 'bob', percentage: 0 }
+      ])
+    )
+    await contract.ConfirmContribution(ctx, 'M_FILTER2', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_FILTER2', 'bob', 'CONFIRMED')
+
+    // bob 累计贡献为 0%，应被拒绝签发
+    ctx.stub.nextTransaction('tx-issue-filter-bob')
+    await expect(contract.IssueCertificate(ctx, 'CP-FILTER', 'P_FILTER', 'bob'))
+      .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: /)
+
+    // alice 在两个里程碑中都有 percentage > 0，都应该出现在证书中
+    ctx.stub.nextTransaction('tx-issue-filter-alice')
+    const aliceCert = JSON.parse(await contract.IssueCertificate(ctx, 'CP-FILTER-A', 'P_FILTER', 'alice'))
+    expect(aliceCert.milestoneIds).toEqual(['M_FILTER1', 'M_FILTER2'])
   })
 
   test('同一 projectId + memberId 重复签发返回已有证书（幂等，不产生新 ID）', async () => {
@@ -321,22 +518,22 @@ describe('ChainProofContract - Certificate', () => {
       .rejects.toThrow(/^PROJECT_NOT_FOUND: /)
   })
 
-  test('成员有 VERIFIED 里程碑之外无贡献记录 -> VALIDATION_ERROR', async () => {
-    // charlie 在 M001（VERIFIED）中占 27%，可签发；
-    // 构造一个只在 REJECTED 里程碑中出现的成员 dave 所属项目
-    await contract.CreateProject(ctx, 'P004', 'no verified contribution', 'd', 'dave',
-      JSON.stringify(['dave', 'erin']))
+  test('项目有 VERIFIED 里程碑但成员累计贡献为 0% -> NO_VERIFIED_CONTRIBUTION', async () => {
+    // 构造一个项目：M001 VERIFIED（只有 alice 和 bob），charlie 是项目成员但未参与任何 VERIFIED 里程碑
+    await contract.CreateProject(ctx, 'P004', 'zero contribution member', 'd', 'alice',
+      JSON.stringify(['alice', 'bob', 'charlie']))
     ctx.stub.setTimestamp('2026-09-18T10:00:00.000Z')
     await contract.CreateMilestone(
-      ctx, 'M020', 'P004', 'only pending', 'd', 'z.zip', HASH_A,
-      JSON.stringify([{ memberId: 'dave', percentage: 60 }, { memberId: 'erin', percentage: 40 }])
+      ctx, 'M020', 'P004', 'only alice and bob', 'd', 'z.zip', HASH_A,
+      JSON.stringify([{ memberId: 'alice', percentage: 60 }, { memberId: 'bob', percentage: 40 }])
     )
-    // 只有 dave 确认 -> PENDING，basedOnMilestones = 0
-    await contract.ConfirmContribution(ctx, 'M020', 'dave', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M020', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M020', 'bob', 'CONFIRMED')
 
-    ctx.stub.nextTransaction('tx-issue-pending')
-    await expect(contract.IssueCertificate(ctx, 'CP-020', 'P004', 'dave'))
-      .rejects.toThrow(/还没有已验证/)
+    // charlie 是项目成员但累计贡献为 0%
+    ctx.stub.nextTransaction('tx-issue-zero')
+    await expect(contract.IssueCertificate(ctx, 'CP-020', 'P004', 'charlie'))
+      .rejects.toThrow(/^NO_VERIFIED_CONTRIBUTION: /)
   })
 
   test('缺参数 -> VALIDATION_ERROR', async () => {

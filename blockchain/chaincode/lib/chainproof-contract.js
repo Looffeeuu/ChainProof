@@ -375,28 +375,32 @@ class ChainProofContract extends Contract {
   /**
    * 只统计 VERIFIED 里程碑的贡献分布。
    *
-   * 聚合口径：某成员在其参与的所有 VERIFIED 里程碑中 percentage 的算术平均，
-   * 再用最大余数法取整（见 _roundContributions）。
+   * 聚合口径（PR #9 契约）：
+   *   - 分母为项目全部 VERIFIED 里程碑总数 N（不是成员参与条数）；
+   *   - 成员未出现在某条 VERIFIED 里程碑时，该条按 0 计算；
+   *   - 返回项目全部成员，未参与任何已验证里程碑的成员返回 percentage: 0；
+   *   - 项目无 VERIFIED 里程碑时返回全员 0，basedOnMilestones = 0。
    *
-   * 为什么不能直接 Math.round 每一项：
-   *   Math.round 对 .5 一律进位，多个成员同时命中 .5 时整数总和会超过 100。
-   *   实测：alice 40/60、bob 35/20、charlie 25/20 两个里程碑，
-   *   精确平均为 50 / 27.5 / 22.5，逐项 Math.round 得 50+28+23 = 101。
-   *   这会让 Dashboard 的贡献占比图对不上，答辩时出现「贡献总和 101%」。
+   * 取整用最大余数法（见 _roundContributions），保证整数总和严格为 100。
    *
    * @returns {Promise<string>} {projectId, members:[{memberId, percentage}], basedOnMilestones} JSON
    */
   async GetProjectContributions (ctx, projectId) {
     this._requireNonEmptyString(projectId, 'projectId')
-    if (!(await this.ProjectExists(ctx, projectId))) {
-      throw new ChainProofError('PROJECT_NOT_FOUND', `项目 ${projectId} 不存在。`)
-    }
+    const project = await this._readProject(ctx, projectId)
 
     const milestoneIds = await this._getIndexedMilestoneIds(ctx, projectId)
+    // 以项目全部成员为全集初始化，保证 0% 成员也会出现在结果中
     const totals = new Map()
+    for (const memberId of project.members) {
+      totals.set(memberId, { sum: 0 })
+    }
     let basedOnMilestones = 0
 
-    for (const milestoneId of milestoneIds) {
+    // 按 milestoneId 升序遍历后累加，保证各背书节点浮点累加顺序一致
+    const sortedMilestoneIds = [...milestoneIds].sort((a, b) => a.localeCompare(b))
+
+    for (const milestoneId of sortedMilestoneIds) {
       const data = await ctx.stub.getState(this._milestoneKey(milestoneId))
       if (!data || data.length === 0) continue
 
@@ -405,30 +409,31 @@ class ChainProofContract extends Contract {
 
       basedOnMilestones += 1
       for (const contributor of milestone.contributors) {
-        const current = totals.get(contributor.memberId) || { sum: 0, count: 0 }
-        current.sum += Number(contributor.percentage)
-        current.count += 1
-        totals.set(contributor.memberId, current)
+        const current = totals.get(contributor.memberId)
+        if (current) {
+          current.sum += Number(contributor.percentage)
+        }
       }
     }
 
+    // 分母为全部 VERIFIED 里程碑总数 N；N = 0 时全员 exact = 0
     const averages = [...totals.entries()]
-      .map(([memberId, { sum, count }]) => ({
+      .map(([memberId, { sum }]) => ({
         memberId,
-        exact: count === 0 ? 0 : sum / count
+        exact: basedOnMilestones === 0 ? 0 : sum / basedOnMilestones
       }))
       .sort((a, b) => a.memberId.localeCompare(b.memberId))
 
-    const members = this._roundContributions(averages)
+    const members = this._roundContributions(averages, basedOnMilestones)
     return JSON.stringify({ projectId, members, basedOnMilestones })
   }
 
   /**
    * 最大余数法（Hamilton method）把浮点平均数取整为整数。
    *
-   * 保证：整数之和 === Math.round(浮点之和)。
-   * 因此当所有成员参与了同样数量的 VERIFIED 里程碑时（每个里程碑内百分比之和为 100，
-   * 故浮点平均之和恰为 100），取整后仍严格等于 100。
+   * 契约下（PR #9）：等权分母为全部 VERIFIED 里程碑总数 N，
+   * 每个里程碑内 contributors 百分比之和为 100，故精确平均之和恒为 100。
+   * 因此 targetSum 固定为 100（N > 0 时）或 0（N = 0 时），语义更贴合契约。
    *
    * 确定性要求（重要）：
    *   链码必须在所有背书节点上产出完全一致的结果，否则背书失败。
@@ -436,15 +441,16 @@ class ChainProofContract extends Contract {
    *   不依赖 Map 迭代顺序或数组 sort 的稳定性差异。
    *
    * @param {Array<{memberId: string, exact: number}>} averages 已按 memberId 升序排列
+   * @param {number} basedOnMilestones VERIFIED 里程碑总数
    * @returns {Array<{memberId: string, percentage: number}>}
    */
-  _roundContributions (averages) {
+  _roundContributions (averages, basedOnMilestones) {
     if (!Array.isArray(averages) || averages.length === 0) {
       return []
     }
 
-    const exactSum = averages.reduce((sum, item) => sum + item.exact, 0)
-    const targetSum = Math.round(exactSum)
+    // 等权口径下精确和恒为 100（N > 0）或 0（N = 0），直接固定 targetSum
+    const targetSum = basedOnMilestones > 0 ? 100 : 0
 
     const entries = averages.map((item) => {
       const floor = Math.floor(item.exact)
@@ -524,10 +530,11 @@ class ChainProofContract extends Contract {
     }
 
     const memberContribution = contributions.members.find((item) => item.memberId === memberId)
-    if (!memberContribution) {
+    // 0% 成员（累计贡献为 0）不能签发证书
+    if (!memberContribution || memberContribution.percentage <= 0) {
       throw new ChainProofError(
-        'VALIDATION_ERROR',
-        `成员 ${memberId} 在项目 ${projectId} 的已验证里程碑中没有贡献记录，无法签发贡献证明。`
+        'NO_VERIFIED_CONTRIBUTION',
+        `成员 ${memberId} 在项目 ${projectId} 的已验证里程碑中累计贡献为 0%，无法签发贡献证明。`
       )
     }
 
@@ -717,13 +724,22 @@ class ChainProofContract extends Contract {
 
       const milestone = this._parseJson(data, `milestone ${milestoneId}`)
       if (milestone.status !== MILESTONE_STATUS.VERIFIED) continue
-      if (!milestone.contributors.some((item) => item.memberId === memberId)) continue
 
-      verified.push(milestoneId)
+      // 只保留该成员在该里程碑中 percentage > 0 的记录
+      const contributor = milestone.contributors.find((item) => item.memberId === memberId)
+      if (!contributor || contributor.percentage <= 0) continue
+
+      verified.push({ milestoneId, createdAt: milestone.createdAt })
     }
 
-    verified.sort((a, b) => String(a).localeCompare(String(b)))
-    return verified
+    // 契约要求：按 createdAt 正序，时间相同再按 milestoneId 升序
+    verified.sort((a, b) => {
+      const timeDiff = String(a.createdAt).localeCompare(String(b.createdAt))
+      if (timeDiff !== 0) return timeDiff
+      return String(a.milestoneId).localeCompare(String(b.milestoneId))
+    })
+
+    return verified.map((item) => item.milestoneId)
   }
 
   async _drainCertificates (iterator, ctx) {
