@@ -176,8 +176,12 @@ async function 取消哈希后不许提交(page) {
       await $wait(80)
     }
 
+    // 文件受 50 MB 上限约束，原生实现几十毫秒就算完，来不及点取消。
+    // 藏起 crypto.subtle 逼它走纯 JS 分片路径——也就是用 http://局域网IP
+    // 打开时的真实路径，取消按钮本来就主要是为它准备的
+    Object.defineProperty(window.crypto, 'subtle', { value: undefined, configurable: true })
     const fi = document.querySelector('input[type=file]')
-    fi.files = $file('big.bin', 220 * 1024 * 1024)
+    fi.files = $file('big.bin', 40 * 1024 * 1024)
     fi.dispatchEvent(new Event('change', { bubbles: true }))
     await $wait(60)
 
@@ -205,6 +209,62 @@ async function 取消哈希后不许提交(page) {
     typeof r.why === 'string' && r.why.includes('SHA-256'),
     r.why
   )
+}
+
+/**
+ * 超过 50 MB 的文件当场拦下，不去算哈希。
+ *
+ * 两处都要守：提交页（拦住提交、说清原因）与确认页的核对区
+ * （不算、给出说法）。不拦的话，原生实现会把整个文件读进内存，
+ * 选一个几 GB 的文件标签页直接崩。
+ */
+async function 超限文件当场拦下(page) {
+  await goAs(page, 'alice', '/projects/P001/milestones/new', 'form')
+  await page.evaluate(HELPERS)
+
+  const r = JSON.parse(await page.evaluate(`(async () => {
+    // 先填标题：按钮旁边只说第一条没满足的规则，标题空着的话说的是标题
+    const title = document.querySelector('input[type=text]')
+    title.value = '自检里程碑'
+    title.dispatchEvent(new Event('input', { bubbles: true }))
+
+    const fi = document.querySelector('input[type=file]')
+    fi.files = $file('huge.bin', 50 * 1024 * 1024 + 1)
+    fi.dispatchEvent(new Event('change', { bubbles: true }))
+    await $wait(300)
+    const invalid = fi.getAttribute('aria-invalid')
+    $btn('提交并存证').click()
+    await $wait(800)
+    return JSON.stringify({
+      hashing: Boolean(document.querySelector('.hashing')),
+      hashShown: Boolean(document.querySelector('.hash-line')),
+      invalid,
+      why: $text('.why'),
+      path: location.pathname
+    })
+  })()`))
+
+  assert('超限文件不进入哈希计算', r.hashing === false && r.hashShown === false,
+    `hashing=${r.hashing} hash-line=${r.hashShown}`)
+  assert('文件框标成无效', r.invalid === 'true', `aria-invalid=${r.invalid}`)
+  assert('说清了上限是多少', typeof r.why === 'string' && r.why.includes('50 MB'), r.why)
+  assert('提交被拦住，没有跳走', r.path === '/projects/P001/milestones/new', r.path)
+
+  await goAs(page, 'alice', '/milestones/M001', '.checker')
+  await page.evaluate(HELPERS)
+  const c = JSON.parse(await page.evaluate(`(async () => {
+    const fi = document.querySelector('.checker input[type=file]')
+    fi.files = $file('huge.bin', 50 * 1024 * 1024 + 1)
+    fi.dispatchEvent(new Event('change', { bubbles: true }))
+    await $wait(300)
+    return JSON.stringify({
+      text: document.querySelector('.checker').innerText,
+      verdict: Boolean(document.querySelector('.checker .result'))
+    })
+  })()`))
+
+  assert('核对区对超限文件给出说法', c.text.includes('上传上限'), c.text.split(String.fromCharCode(10)).pop())
+  assert('核对区不下「一致 / 对不上」的结论', c.verdict === false, `result=${c.verdict}`)
 }
 
 /**
@@ -426,6 +486,7 @@ const SCENARIOS = [
   ['空表单点提交', 空表单点提交],
   ['建完项目侧栏跟上', 创建项目后侧栏跟上],
   ['取消哈希后不许提交', 取消哈希后不许提交],
+  ['超限文件当场拦下', 超限文件当场拦下],
   ['比例超出时横条溢出', 比例超出时横条溢出],
   ['拒绝要二次确认', 拒绝要二次确认],
   ['确认之后有明确反馈', 确认之后有明确反馈],

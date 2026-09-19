@@ -3,22 +3,21 @@
  */
 import { get, post } from './client.js'
 import * as mock from '../mock/handlers.js'
-
-const useMock = import.meta.env.VITE_USE_MOCK !== 'false'
+import { useMock } from './mode.js'
 
 /** 某个项目的里程碑，按时间正序 */
 export const listMilestones = (projectId) =>
-  useMock ? mock.listMilestones(projectId) : get(`/projects/${projectId}/milestones`)
+  useMock('listMilestones') ? mock.listMilestones(projectId) : get(`/projects/${projectId}/milestones`)
 
 export const getMilestone = (milestoneId) =>
-  useMock ? mock.getMilestone(milestoneId) : get(`/milestones/${milestoneId}`)
+  useMock('getMilestone') ? mock.getMilestone(milestoneId) : get(`/milestones/${milestoneId}`)
 
 /**
  * 提交里程碑。真接口是 multipart/form-data（spec/02 §5.1），
  * 所以这里把对象转成 FormData；假数据直接吃对象。
  */
 export const createMilestone = (projectId, payload) => {
-  if (useMock) return mock.createMilestone(projectId, payload)
+  if (useMock('createMilestone')) return mock.createMilestone(projectId, payload)
   const form = new FormData()
   form.append('title', payload.title)
   form.append('description', payload.description ?? '')
@@ -42,6 +41,6 @@ export const createMilestone = (projectId, payload) => {
  * @param {{memberId: string, decision: 'CONFIRMED'|'REJECTED'}} payload
  */
 export const confirmMilestone = (milestoneId, payload) =>
-  useMock
+  useMock('confirmMilestone')
     ? mock.confirmMilestone(milestoneId, payload)
     : post(`/milestones/${milestoneId}/confirmations`, { decision: payload.decision })

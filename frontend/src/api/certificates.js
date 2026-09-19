@@ -3,8 +3,7 @@
  */
 import { get, post } from './client.js'
 import * as mock from '../mock/handlers.js'
-
-const useMock = import.meta.env.VITE_USE_MOCK !== 'false'
+import { useMock } from './mode.js'
 
 /**
  * 证书列表。两个筛选参数都可选（spec/03 §8.1）。
@@ -13,7 +12,7 @@ const useMock = import.meta.env.VITE_USE_MOCK !== 'false'
  * @returns {Promise<object[]>}
  */
 export const listCertificates = (filter = {}) => {
-  if (useMock) return mock.listCertificates(filter)
+  if (useMock('listCertificates')) return mock.listCertificates(filter)
   const query = new URLSearchParams()
   if (filter.projectId) query.set('projectId', filter.projectId)
   if (filter.memberId) query.set('memberId', filter.memberId)
@@ -22,7 +21,7 @@ export const listCertificates = (filter = {}) => {
 }
 
 export const getCertificate = (certificateId) =>
-  useMock ? mock.getCertificate(certificateId) : get(`/certificates/${certificateId}`)
+  useMock('getCertificate') ? mock.getCertificate(certificateId) : get(`/certificates/${certificateId}`)
 
 /**
  * 签发贡献证明（spec/03 §8.2）。
@@ -34,7 +33,7 @@ export const getCertificate = (certificateId) =>
  * @param {{memberId: string}} payload
  */
 export const createCertificate = (projectId, payload) =>
-  useMock
+  useMock('createCertificate')
     ? mock.createCertificate(projectId, payload)
     : post(`/projects/${projectId}/certificates`, payload)
 
@@ -64,5 +63,5 @@ function unwrapVerify(res) {
 /** 公开验证：ID 不存在时返回 verificationStatus: 'NOT_FOUND'，不抛错（spec/03 §9） */
 export const verifyCertificate = async (certificateId) =>
   unwrapVerify(
-    useMock ? await mock.verifyCertificate(certificateId) : await get(`/verify/${certificateId}`)
+    useMock('verifyCertificate') ? await mock.verifyCertificate(certificateId) : await get(`/verify/${certificateId}`)
   )

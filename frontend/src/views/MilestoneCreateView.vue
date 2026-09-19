@@ -15,6 +15,7 @@ import { getProject } from '../api/projects.js'
 import { createMilestone } from '../api/milestones.js'
 import { sumPercentages } from '../utils/percentage.js'
 import { hashFile } from '../utils/sha256.js'
+import { MAX_FILE_LABEL, formatBytes, isTooLarge } from '../utils/file-limit.js'
 import { focusFirstInvalid } from '../composables/useInvalidFocus.js'
 import { setFlash } from '../stores/flash.js'
 
@@ -137,7 +138,9 @@ const errors = computed(() => ({
   // 而「可核对」正是这个产品的全部主张
   file: !form.file
     ? '请选择要存证的成果文件。'
-    : hashError.value
+    : isTooLarge(form.file)
+      ? `这个文件有 ${formatBytes(form.file.size)}，超过了单个文件 ${MAX_FILE_LABEL} 的上限。`
+      : hashError.value
       ? FILE_UNREADABLE
       : !hashing.value && !fileHash.value
         ? '这个文件的 SHA-256 还没算完。重新选一次文件，等它算完再提交。'
@@ -175,7 +178,9 @@ async function pickFile(event) {
   touched.file = true
   fileHash.value = ''
   hashError.value = null
-  if (!picked) {
+  // 超限的文件不算哈希：反正提交不了，而原生路径会把整个文件读进内存，
+  // 几 GB 的文件能让标签页直接崩掉。拦下的理由由 errors.file 说
+  if (!picked || isTooLarge(picked)) {
     hashing.value = false
     return
   }
@@ -209,13 +214,6 @@ function cancelHashing() {
   hashSeq++            // 让正在跑的那次即使算完也写不进来
   hashing.value = false
   hashProgress.value = 0
-}
-
-/** 1234567 → 1.2 MB。只用于显示，不参与任何计算 */
-function fileSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 /**
@@ -352,7 +350,7 @@ async function submit() {
               v-slot="f"
               label="成果文件"
               required
-              hint="这份文件会上传保存；写进链上的只有它的 SHA-256。"
+              :hint="`单个文件不超过 ${MAX_FILE_LABEL}。文件会上传保存，写进链上的只有它的 SHA-256。`"
               :error="touched.file ? errors.file : ''"
             >
               <!-- aria-invalid 不能漏。focusFirstInvalid 找的就是它，
@@ -369,7 +367,7 @@ async function submit() {
               <div v-if="form.file" class="picked">
                 <p class="t-small">
                   已选择 <strong>{{ form.file.name }}</strong>
-                  <span class="t-soft t-nums"> · {{ fileSize(form.file.size) }}</span>
+                  <span class="t-soft t-nums"> · {{ formatBytes(form.file.size) }}</span>
                 </p>
 
                 <!-- 算哈希这件事对用户是可见的：他要承诺的就是这串字符，

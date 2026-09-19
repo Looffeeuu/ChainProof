@@ -16,6 +16,9 @@ import { confirmGate } from '../src/utils/confirm-gate.js'
 import { Sha256, sha256Bytes, hashFile, hasNativeDigest } from '../src/utils/sha256.js'
 import { createHash, randomBytes } from 'node:crypto'
 import { formatDateTime, formatRelative } from '../src/utils/format-time.js'
+import { MAX_FILE_BYTES, MAX_FILE_LABEL, isTooLarge, formatBytes } from '../src/utils/file-limit.js'
+import { API_NAMES, useMock } from '../src/api/mode.js'
+import { readFileSync } from 'node:fs'
 
 let failed = 0
 const results = []
@@ -566,6 +569,56 @@ await check('提交里程碑时，前端算出的哈希会被带进新建的里�
     `新建的里程碑 fileHash 是 ${JSON.stringify(created.fileHash)}，应为前端算出的那个`)
   assert(/^[0-9a-f]{64}$/.test(created.fileHash), 'fileHash 不是 64 位小写十六进制')
   return created.fileHash
+})
+
+// —— 文件大小上限（utils/file-limit.js）——
+
+await check('上限是 50 MiB，边界上的那一个字节判得对', () => {
+  assert(MAX_FILE_BYTES === 52428800, `上限是 ${MAX_FILE_BYTES}，应为 52428800`)
+  assert(MAX_FILE_LABEL === '50 MB', `显示成 ${MAX_FILE_LABEL}`)
+  assert(!isTooLarge({ size: MAX_FILE_BYTES }), '恰好 50 MiB 被判成超限')
+  assert(isTooLarge({ size: MAX_FILE_BYTES + 1 }), '多一个字节没判成超限')
+  assert(!isTooLarge(null) && !isTooLarge(undefined), '没有文件时被判成超限')
+  assert(formatBytes(3 * 1024 ** 3) === '3.0 GB', `3 GiB 显示成 ${formatBytes(3 * 1024 ** 3)}`)
+  return `${MAX_FILE_BYTES} 字节`
+})
+
+await check('假接口对超限文件回 413 + FILE_TOO_LARGE', async () => {
+  let err = null
+  try {
+    await api.createMilestone('P001', {
+      title: '超限', fileName: 'huge.bin', fileHash: '0'.repeat(64),
+      file: { size: MAX_FILE_BYTES + 1 },
+      contributors: [{ memberId: 'alice', percentage: 100 }]
+    })
+  } catch (e) {
+    err = e
+  }
+  assert(err, '超限文件被收下了')
+  assert(err.code === 'FILE_TOO_LARGE' && err.status === 413, `得到 ${err.code} / ${err.status}`)
+  return err.message
+})
+
+// —— 逐接口切换（api/mode.js）——
+
+await check('没配环境变量时，每个接口都走假数据', () => {
+  const real = API_NAMES.filter((n) => !useMock(n))
+  assert(real.length === 0, `这些默认走了真接口：${real}`)
+  return `${API_NAMES.length} 个接口`
+})
+
+await check('api/ 里每一处 useMock(名字) 都登记在 API_NAMES 里，且一个不多', () => {
+  // 名字写错不会报错，只会让那个接口永远走假数据——联调那天以为切过去了
+  const used = ['projects', 'milestones', 'certificates'].flatMap((f) =>
+    [...readFileSync(new URL(`../src/api/${f}.js`, import.meta.url), 'utf8')
+      .matchAll(/useMock\('(\w+)'\)/g)].map((m) => m[1])
+  )
+  const unknown = used.filter((n) => !API_NAMES.includes(n))
+  const unused = API_NAMES.filter((n) => !used.includes(n))
+  assert(unknown.length === 0, `没登记的：${unknown}`)
+  assert(unused.length === 0, `登记了却没人用的：${unused}`)
+  assert(new Set(used).size === used.length, '同一个名字被两个接口用了')
+  return used.join(' ')
 })
 
 for (const [tag, label, detail] of results) {

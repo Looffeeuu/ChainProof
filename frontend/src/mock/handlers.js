@@ -10,6 +10,7 @@
  */
 import { projects, milestones, certificates } from './fixtures.js'
 import { largestRemainder } from '../utils/percentage.js'
+import { MAX_FILE_LABEL, isTooLarge } from '../utils/file-limit.js'
 
 const clone = (v) => JSON.parse(JSON.stringify(v))
 
@@ -98,6 +99,10 @@ export async function createMilestone(projectId, payload) {
   // 「接口拒绝」这条路径在开发时也能被走到、被看见
   if (total !== 100) {
     throw fail('CONTRIBUTION_TOTAL_INVALID', `贡献比例总和是 ${total}%，必须正好是 100%。`)
+  }
+  // 同上，前端选文件时已经拦过。码与状态按组长 09-18 的答复：413 + FILE_TOO_LARGE
+  if (isTooLarge(payload.file)) {
+    throw fail('FILE_TOO_LARGE', `单个文件不能超过 ${MAX_FILE_LABEL}。`, 413)
   }
   const created = {
     milestoneId: `M${Date.now().toString().slice(-6)}`,

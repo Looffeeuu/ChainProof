@@ -6,10 +6,8 @@
  */
 import { get, post } from './client.js'
 import * as mock from '../mock/handlers.js'
+import { useMock } from './mode.js'
 import { session } from '../stores/session.js'
-
-// 默认走假数据。要连真接口就在 frontend/.env.local 里写 VITE_USE_MOCK=false
-const useMock = import.meta.env.VITE_USE_MOCK !== 'false'
 
 /**
  * 项目列表。
@@ -23,11 +21,11 @@ const useMock = import.meta.env.VITE_USE_MOCK !== 'false'
  * @returns {Promise<Array<{projectId:string,name:string,description:string,ownerId:string,members:string[],createdAt:string,status:string}>>}
  */
 export const listProjects = () =>
-  useMock ? mock.listProjects(session.currentMemberId) : get('/projects')
+  useMock('listProjects') ? mock.listProjects(session.currentMemberId) : get('/projects')
 
 /** @returns {Promise<object>} 单个 Project */
 export const getProject = (projectId) =>
-  useMock ? mock.getProject(projectId) : get(`/projects/${projectId}`)
+  useMock('getProject') ? mock.getProject(projectId) : get(`/projects/${projectId}`)
 
 /**
  * 创建项目。真接口的 ownerId 优先取请求头里的 `X-Member-Id`，
@@ -36,8 +34,8 @@ export const getProject = (projectId) =>
  * @returns {Promise<object>} 新建的 Project
  */
 export const createProject = (payload) =>
-  useMock ? mock.createProject(payload) : post('/projects', payload)
+  useMock('createProject') ? mock.createProject(payload) : post('/projects', payload)
 
 /** @returns {Promise<{members: Array<{memberId:string, percentage:number}>, basedOnMilestones:number}>} */
 export const getContributions = (projectId) =>
-  useMock ? mock.getContributions(projectId) : get(`/projects/${projectId}/contributions`)
+  useMock('getContributions') ? mock.getContributions(projectId) : get(`/projects/${projectId}/contributions`)

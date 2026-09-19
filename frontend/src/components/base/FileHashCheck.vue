@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import HashText from './HashText.vue'
 import BaseSpinner from './BaseSpinner.vue'
 import { hashFile } from '../../utils/sha256.js'
+import { MAX_FILE_LABEL, formatBytes, isTooLarge } from '../../utils/file-limit.js'
 
 /**
  * 「把文件拖进来，我算给你看对不对」——把「核对这串哈希」从一句话变成一个动作。
@@ -23,6 +24,8 @@ const actual = ref('')
 const busy = ref(false)
 const progress = ref(0)
 const failed = ref(false)
+/** 超过上传上限的文件的大小；0 表示没超 */
+const oversize = ref(0)
 const dragging = ref(false)
 
 const normalized = (v) => String(v || '').trim().toLowerCase()
@@ -52,6 +55,16 @@ async function check(file) {
   fileName.value = file.name
   actual.value = ''
   failed.value = false
+  oversize.value = 0
+
+  // 超过上传上限的文件不可能是这里存证的那一份（后端收不下它），不必算。
+  // 算的话原生路径会把整个文件读进内存，几 GB 的文件能让标签页崩掉
+  if (isTooLarge(file)) {
+    busy.value = false
+    oversize.value = file.size
+    return
+  }
+
   busy.value = true
   progress.value = 0
   try {
@@ -110,6 +123,10 @@ function onDrop(event) {
 
     <p v-else-if="failed" class="line t-small verdict-miss" role="alert">
       这个文件没能读取，换一个再试。
+    </p>
+
+    <p v-else-if="oversize" class="line t-small t-soft" role="status">
+      {{ fileName }} 有 {{ formatBytes(oversize) }}，超过了单个文件 {{ MAX_FILE_LABEL }} 的上传上限，不会是这里存证的那一份，所以没有计算。
     </p>
 
     <div v-else-if="matches !== null" class="result" :class="matches ? 'is-hit' : 'is-miss'" role="status" aria-live="polite">
