@@ -171,13 +171,13 @@ MVP 固定规则：
 
 Contribution Dashboard 只统计 `VERIFIED` 里程碑，每条已验证里程碑权重相同。
 
-设已验证里程碑数量为 `N`：
+设项目中 `VERIFIED` 里程碑数量为 `N = basedOnMilestones`：
 
-- 每个项目成员的精确累计比例为：该成员在全部已验证里程碑中的 percentage 总和除以 `N`；未参与某条里程碑时按 0 计算。
-- 对精确结果使用最大余数法转成整数，最终所有成员的 percentage 总和必须严格等于 100。
-- 余数相同时按 `memberId` 升序分配，保证所有 Fabric 背书节点得到相同结果。
-- 返回项目全部成员，包括累计比例为 0 的成员；数组按 `memberId` 升序排列。
-- 没有已验证里程碑时，全员返回 0，`basedOnMilestones` 返回 0。
+- 以项目全部成员为全集。对每位成员计算整数 `sum`，即其在全部 `VERIFIED` 里程碑中的 `percentage` 之和；未参与某条时计 0。当 `N > 0` 时，精确累计比例在数学上是 `sum / N`。
+- 当 `N > 0` 时，全程使用整数运算：`floor = sum div N`，`remainder = sum mod N`。先分配各成员的 `floor`，再将 `100 - Σfloor` 个百分点依次分给 `remainder` 最大的成员。不得用浮点除法或浮点余数比较。
+- 余数相同时按 `memberId` 的 UTF-8 无符号字节序升序分配；返回数组也按同一顺序排列。不得使用 `localeCompare()` 或本地化排序，确保前端 Mock、后端与 Fabric 背书节点结果一致。
+- 最终所有成员的整数 `percentage` 总和严格等于 100，包括累计比例为 0 的项目成员。
+- `N = 0` 时不执行除法，全员返回 0，`basedOnMilestones` 返回 0。
 
 后端返回：
 
@@ -195,11 +195,10 @@ Contribution Dashboard 只统计 `VERIFIED` 里程碑，每条已验证里程碑
 
 ## 9. Certificate 规则
 
-- 项目至少有 1 条 `VERIFIED` milestone 才允许签发。
-- 成员必须属于该项目。
-- 成员累计 `contributionPercentage` 必须大于 0；0% 成员保留在 Contribution Dashboard 中，但不能签发证书，返回 `NO_VERIFIED_CONTRIBUTION`。
-- `milestoneIds` 只保存该成员实际参与（contributors 中 `percentage > 0`）的 `VERIFIED` milestone ID，作为不可变快照；按 `createdAt`、`milestoneId` 正序排列。
-- 同一 `projectId + memberId` 重复请求时返回已存在的证书。
+- 签发时先按 `projectId + memberId` 查询已有 Certificate；若存在，直接返回原证书，不重新检查资格，也不重复写链。
+- 尚无证书时，检查成员属于项目；若项目没有 `VERIFIED` milestone，返回 HTTP 409 + `NO_VERIFIED_CONTRIBUTION`。
+- 资格以最大余数法完成后的最终整数 `contributionPercentage`（与 Dashboard 的 `members[].percentage` 相同）为准。最终为 0 时也返回 HTTP 409 + `NO_VERIFIED_CONTRIBUTION`，中文提示统一为「累计贡献比例为 0%，不能签发证书。」只有最终大于 0 才签发；0% 成员仍保留在 Dashboard。
+- `milestoneIds` 只保存该成员实际参与（contributors 中 `percentage > 0`）的 `VERIFIED` milestone ID，作为不可变快照；按 `createdAt`、`milestoneId` 正序排列。项目全部已验证里程碑数 `basedOnMilestones` 与 `Certificate.milestoneIds.length` 不要求相等。
 - Certificate 保存 / 返回 `txId`，用于答辩时展示链上交易依据。
 
 ## 10. 安全与仓库规范
