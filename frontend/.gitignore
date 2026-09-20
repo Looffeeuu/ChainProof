@@ -1,0 +1,2 @@
+# 前端自检产物：scripts/check-components.mjs 每次跑都会重新生成
+dist-ssr/
