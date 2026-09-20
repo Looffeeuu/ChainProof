@@ -1,0 +1,61 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Build and check frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [[ -f package-lock.json ]]; then
+            npm ci --no-audit --no-fund
+          else
+            echo "::notice::frontend/package-lock.json is not on main yet; using npm install until the frontend PR lands."
+            npm install --package-lock=false --no-audit --no-fund
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Run frontend checks when available
+        shell: bash
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.check ? 0 : 1)"; then
+            browser="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+            if [[ -z "$browser" ]]; then
+              echo "::error::A Chromium browser is required for frontend browser and flow checks."
+              exit 1
+            fi
+            CHROME_PATH="$browser" npm run check
+          else
+            echo "::notice::The main branch has no frontend check script yet; it will run when PR #13 is merged."
+          fi
