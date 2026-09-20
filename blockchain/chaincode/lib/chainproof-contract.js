@@ -397,8 +397,8 @@ class ChainProofContract extends Contract {
     }
     let basedOnMilestones = 0
 
-    // 按 milestoneId 升序遍历后累加，保证各背书节点浮点累加顺序一致
-    const sortedMilestoneIds = [...milestoneIds].sort((a, b) => a.localeCompare(b))
+    // 按 milestoneId UTF-8 字节序遍历后累加，保证各背书节点累加顺序一致
+    const sortedMilestoneIds = [...milestoneIds].sort((a, b) => this._compareUtf8ByteOrder(a, b))
 
     for (const milestoneId of sortedMilestoneIds) {
       const data = await ctx.stub.getState(this._milestoneKey(milestoneId))
@@ -416,63 +416,57 @@ class ChainProofContract extends Contract {
       }
     }
 
-    // 分母为全部 VERIFIED 里程碑总数 N；N = 0 时全员 exact = 0
-    const averages = [...totals.entries()]
-      .map(([memberId, { sum }]) => ({
-        memberId,
-        exact: basedOnMilestones === 0 ? 0 : sum / basedOnMilestones
-      }))
-      .sort((a, b) => a.memberId.localeCompare(b.memberId))
+    // 分母为全部 VERIFIED 里程碑总数 N；传递 sum 给 _roundContributions 做整数运算
+    const memberSums = [...totals.entries()]
+      .map(([memberId, { sum }]) => ({ memberId, sum }))
+      .sort((a, b) => this._compareUtf8ByteOrder(a.memberId, b.memberId))
 
-    const members = this._roundContributions(averages, basedOnMilestones)
+    const members = this._roundContributions(memberSums, basedOnMilestones)
     return JSON.stringify({ projectId, members, basedOnMilestones })
   }
 
   /**
-   * 最大余数法（Hamilton method）把浮点平均数取整为整数。
+   * 最大余数法（Hamilton method）用整数运算分配百分比。
    *
-   * 契约下（PR #9）：等权分母为全部 VERIFIED 里程碑总数 N，
-   * 每个里程碑内 contributors 百分比之和为 100，故精确平均之和恒为 100。
-   * 因此 targetSum 固定为 100（N > 0 时）或 0（N = 0 时），语义更贴合契约。
+   * 契约（PR #9）：全程整数运算，`floor = sum div N`、`remainder = sum mod N`。
+   * 先分配各成员的 floor，再将 `100 - Σfloor` 个剩余百分点按 remainder 降序逐个分配。
+   * 余数相同按 memberId UTF-8 字节序升序，保证确定性。
    *
-   * 确定性要求（重要）：
-   *   链码必须在所有背书节点上产出完全一致的结果，否则背书失败。
-   *   因此余数相同时用 memberId 升序作为稳定的次级排序键，
-   *   不依赖 Map 迭代顺序或数组 sort 的稳定性差异。
-   *
-   * @param {Array<{memberId: string, exact: number}>} averages 已按 memberId 升序排列
+   * @param {Array<{memberId: string, sum: number}>} memberSums 已按 memberId UTF-8 字节序排列
    * @param {number} basedOnMilestones VERIFIED 里程碑总数
    * @returns {Array<{memberId: string, percentage: number}>}
    */
-  _roundContributions (averages, basedOnMilestones) {
-    if (!Array.isArray(averages) || averages.length === 0) {
+  _roundContributions (memberSums, basedOnMilestones) {
+    if (!Array.isArray(memberSums) || memberSums.length === 0) {
       return []
     }
 
-    // 等权口径下精确和恒为 100（N > 0）或 0（N = 0），直接固定 targetSum
-    const targetSum = basedOnMilestones > 0 ? 100 : 0
+    // N = 0 时全员返回 0
+    if (basedOnMilestones === 0) {
+      return memberSums.map(({ memberId }) => ({ memberId, percentage: 0 }))
+    }
 
-    const entries = averages.map((item) => {
-      const floor = Math.floor(item.exact)
-      return {
-        memberId: item.memberId,
-        percentage: floor,
-        remainder: item.exact - floor
-      }
+    const N = basedOnMilestones
+    const targetSum = 100
+
+    // 严格整数运算：先取余再减再除，全程不经过浮点除法
+    const entries = memberSums.map(({ memberId, sum }) => {
+      const remainder = sum % N
+      const floor = (sum - remainder) / N
+      return { memberId, percentage: floor, remainder }
     })
 
     const floorSum = entries.reduce((sum, item) => sum + item.percentage, 0)
-    // 因为每项 remainder ∈ [0,1)，故 remaining ∈ [0, entries.length]，不会为负
     let remaining = targetSum - floorSum
 
     if (remaining > 0) {
-      // 余数大者优先获得 +1；余数相同则按 memberId 升序，保证确定性
+      // 余数大者优先获得 +1；余数相同则按 memberId UTF-8 字节序升序，保证确定性
       const order = entries
         .map((item, index) => index)
         .sort((a, b) => {
           const diff = entries[b].remainder - entries[a].remainder
           if (diff !== 0) return diff
-          return entries[a].memberId.localeCompare(entries[b].memberId)
+          return this._compareUtf8ByteOrder(entries[a].memberId, entries[b].memberId)
         })
 
       for (let i = 0; i < remaining && i < order.length; i += 1) {
@@ -505,6 +499,13 @@ class ChainProofContract extends Contract {
     this._requireNonEmptyString(projectId, 'projectId')
     this._requireNonEmptyString(memberId, 'memberId')
 
+    // 幂等优先：同一 projectId + memberId 已有证书则原样返回，不重新检查资格
+    const existingId = await this._findCertificateId(ctx, projectId, memberId)
+    if (existingId) {
+      const existing = await this._readCertificate(ctx, existingId)
+      return JSON.stringify(existing)
+    }
+
     const project = await this._readProject(ctx, projectId)
 
     if (!project.members.includes(memberId)) {
@@ -514,27 +515,19 @@ class ChainProofContract extends Contract {
       )
     }
 
-    // 幂等：同一 projectId + memberId 已有证书则原样返回
-    const existingId = await this._findCertificateId(ctx, projectId, memberId)
-    if (existingId) {
-      const existing = await this._readCertificate(ctx, existingId)
-      return JSON.stringify(existing)
-    }
-
     const contributions = JSON.parse(await this.GetProjectContributions(ctx, projectId))
     if (contributions.basedOnMilestones === 0) {
       throw new ChainProofError(
-        'VALIDATION_ERROR',
-        `项目 ${projectId} 还没有已验证（VERIFIED）的里程碑，暂时无法签发贡献证明。`
+        'NO_VERIFIED_CONTRIBUTION',
+        '累计贡献比例为 0%，不能签发证书。'
       )
     }
 
     const memberContribution = contributions.members.find((item) => item.memberId === memberId)
-    // 0% 成员（累计贡献为 0）不能签发证书
     if (!memberContribution || memberContribution.percentage <= 0) {
       throw new ChainProofError(
         'NO_VERIFIED_CONTRIBUTION',
-        `成员 ${memberId} 在项目 ${projectId} 的已验证里程碑中累计贡献为 0%，无法签发贡献证明。`
+        '累计贡献比例为 0%，不能签发证书。'
       )
     }
 
@@ -910,6 +903,15 @@ class ChainProofContract extends Contract {
 
   _byCreatedAtAsc (a, b) {
     return String(a.createdAt).localeCompare(String(b.createdAt))
+  }
+
+  /**
+   * UTF-8 字节序比较（确定性要求）。
+   * 链码必须在所有背书节点上产出完全一致的结果，localeCompare() 依赖 locale 设置，
+   * 可能导致各节点结果不同。改用 Buffer.compare 按 UTF-8 字节值逐字节比较。
+   */
+  _compareUtf8ByteOrder (a, b) {
+    return Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'))
   }
 
   /**
