@@ -94,25 +94,13 @@ curl http://localhost:3000/api/projects \
   -H "X-Member-Id: alice"
 ```
 
-后端调用：
-
-```text
-GetProjectsByMember(alice)
-```
-
-不带 Header 时进入演示降级模式：
+后端调用链码 `GetAllProjects()`，再按 `X-Member-Id` 对返回项目的 `members` 列表进行过滤。不带 Header 时进入演示降级模式，返回全部项目：
 
 ```bash
 curl http://localhost:3000/api/projects
 ```
 
-后端调用：
-
-```text
-GetAllProjects()
-```
-
-因此 B 线需要在 Chaincode 中提供这两个查询。
+因此 B 线第一批只需提供 `GetAllProjects()`；`GetProjectsByMember(memberId)` 可作为后续优化，不是本阶段联调前置条件。
 
 ## 9. 成功响应与错误响应
 
@@ -163,7 +151,7 @@ GetAllProjects()
 - [ ] 后端能连接 Fabric peer
 - [ ] `POST /api/projects` → `CreateProject`
 - [ ] `GET /api/projects/:id` → `GetProject`
-- [ ] `GET /api/projects` → `GetProjectsByMember / GetAllProjects`
+- [ ] `GET /api/projects` → `GetAllProjects` 并按 `X-Member-Id` 过滤
 - [ ] A 线能把 Project 页面从 mock 切换到真实接口
 
-完成后可关闭 Issue #3，并将 PR #8 从 Draft 转为 Ready。
+真实 Fabric 联调与 A 线首批 Project API 联调通过后，将 PR #8 从 Draft 转为 Ready；审阅并合并后由 `Closes #3` 自动关闭 Issue #3。
