@@ -22,6 +22,7 @@ import { readFileSync } from 'node:fs'
 import { createCache } from '../src/stores/create-cache.js'
 import { unwrapVerify } from '../src/api/certificates.js'
 import { verifyVerdict } from '../src/utils/verify-verdict.js'
+import { CERTIFICATE_FIELDS, certificateProblems } from '../src/utils/certificate-shape.js'
 
 let failed = 0
 const results = []
@@ -657,33 +658,79 @@ await check('公开验证只认 VALID：VERIFIED 不算核验通过', () => {
   return 'VALID → verified；VERIFIED → other'
 })
 
-await check('VALID 的响应缺本体或编号对不上时，按数据异常抛出，不给结论', () => {
+// 判据表必须盖住契约里的每一个字段。PR #13 第二轮 review 抓到的就是这里漏了字段：
+// 注释承诺「六项事实齐全」，代码只校验四项，缺 issuedAt / txId 的响应照样放行
+await check('Certificate 的判据表覆盖 docs/API.md §6 的每一个字段，不多不少', () => {
+  const judged = Object.keys(CERTIFICATE_FIELDS).sort()
+  const contract = [...FIELDS.Certificate].sort()
+  assert(JSON.stringify(judged) === JSON.stringify(contract),
+    `判据表是 [${judged}]，契约字段是 [${contract}]`)
+  return `${judged.length} 个字段`
+})
+
+await check('假数据里的证书都过得了这套判据', () => {
+  certificates.forEach((c) => {
+    const bad = certificateProblems(c)
+    assert(bad.length === 0, `${c.certificateId} 不合格的字段：${bad}`)
+  })
+  return `${certificates.length} 张`
+})
+
+await check('逐字段判据：类型与取值都要对', () => {
+  const good = {
+    certificateId: 'CERT-X', projectId: 'P001', memberId: 'alice',
+    contributionPercentage: 44, milestoneIds: ['M001'],
+    issuedAt: '2026-09-06T01:00:00.000Z', verificationStatus: 'VALID', txId: 'a'.repeat(64)
+  }
+  assert(certificateProblems(good).length === 0, '一份正常的证书被判成不合格')
+
+  const cases = [
+    ['contributionPercentage 是字符串', { contributionPercentage: '44' }],
+    ['contributionPercentage 是小数', { contributionPercentage: 44.5 }],
+    ['contributionPercentage 超过 100', { contributionPercentage: 140 }],
+    ['milestoneIds 不是数组', { milestoneIds: 'M001' }],
+    ['milestoneIds 里混了 null', { milestoneIds: ['M001', null] }],
+    ['issuedAt 不是时间', { issuedAt: '前天' }],
+    ['txId 不是 64 位十六进制', { txId: 'abc' }],
+    ['certificateId 是空串', { certificateId: '   ' }]
+  ]
+  for (const [label, patch] of cases) {
+    const field = Object.keys(patch)[0]
+    const bad = certificateProblems({ ...good, ...patch })
+    assert(bad.includes(field), `${label}：应当挑出 ${field}，实际挑出 [${bad}]`)
+  }
+  return `${cases.length} 种坏值`
+})
+
+await check('公开验证：VALID 但记录不完整或自相矛盾时，按数据异常抛出，不给结论', () => {
   const body = {
     certificateId: 'CERT-X', projectId: 'P001', memberId: 'alice',
     contributionPercentage: 44, milestoneIds: ['M001'],
     issuedAt: '2026-09-06T01:00:00.000Z', verificationStatus: 'VALID', txId: 'a'.repeat(64)
   }
+  const envelope = (certificate, outer = {}) =>
+    ({ certificateId: 'CERT-X', verificationStatus: 'VALID', certificate, ...outer })
 
-  const ok = unwrapVerify({ certificateId: 'CERT-X', verificationStatus: 'VALID', certificate: body })
-  assert(ok.memberId === 'alice' && ok.verificationStatus === 'VALID', '正常的信封应当被拆成扁平的证书')
+  const ok = unwrapVerify(envelope(body))
+  assert(ok.memberId === 'alice' && ok.verificationStatus === 'VALID' && ok.txId === body.txId,
+    '正常的信封应当被拆成扁平的证书')
+  assert(unwrapVerify({ ...body }).memberId === 'alice', '没有信封但八项齐全的响应也应当收下')
 
-  const flat = unwrapVerify({ ...body })
-  assert(flat.memberId === 'alice', '没有信封但字段齐全的响应也应当收下')
-
+  const drop = (field) => {
+    const c = { ...body }
+    delete c[field]
+    return envelope(c)
+  }
   const bad = [
     ['缺 certificate 本体', { certificateId: 'CERT-X', verificationStatus: 'VALID' }],
-    ['本体缺 milestoneIds', {
-      certificateId: 'CERT-X', verificationStatus: 'VALID',
-      certificate: { ...body, milestoneIds: undefined }
-    }],
-    ['本体的 contributionPercentage 是 null', {
-      certificateId: 'CERT-X', verificationStatus: 'VALID',
-      certificate: { ...body, contributionPercentage: null }
-    }],
-    ['内外层编号对不上', {
-      certificateId: 'CERT-X', verificationStatus: 'VALID',
-      certificate: { ...body, certificateId: 'CERT-别的' }
-    }]
+    ['缺 issuedAt', drop('issuedAt')],
+    ['缺 txId', drop('txId')],
+    ['缺 milestoneIds', drop('milestoneIds')],
+    ['缺 contributionPercentage', drop('contributionPercentage')],
+    ['contributionPercentage 是 null', envelope({ ...body, contributionPercentage: null })],
+    ['txId 格式不对', envelope({ ...body, txId: 'not-a-tx' })],
+    ['内外层编号冲突', envelope({ ...body, certificateId: 'CERT-别的' })],
+    ['内外层状态冲突', envelope({ ...body, verificationStatus: 'NOT_FOUND' })]
   ]
   for (const [label, res] of bad) {
     let err = null
@@ -695,7 +742,13 @@ await check('VALID 的响应缺本体或编号对不上时，按数据异常抛�
   // 查无此证与其它状态照常交给页面，不抛错
   const missing = unwrapVerify({ certificateId: 'CP-NOPE', verificationStatus: 'NOT_FOUND' })
   assert(missing.verificationStatus === 'NOT_FOUND', '查无此证不该被当成异常')
-  return `4 种不完整响应都拦住了`
+  // 整体就不是 VALID 的响应不算异常：页面照实说「查到了，但不是有效状态」。
+  // 只有「自称 VALID 却拿不出依据」才是异常
+  const revoked = unwrapVerify({ certificateId: 'CERT-X', verificationStatus: 'REVOKED', certificate: { ...body, verificationStatus: 'REVOKED' } })
+  assert(revoked.verificationStatus === 'REVOKED', '没见过的状态应当原样交给页面')
+  const innerOnly = unwrapVerify({ certificateId: 'CERT-X', certificate: { ...body, verificationStatus: 'REVOKED' } })
+  assert(innerOnly.verificationStatus === 'REVOKED', '外层没写状态时，以本体的状态为准交给页面')
+  return `${bad.length} 种响应都拦住了`
 })
 
 // —— 累计比例与证书，PR #9 定稿（docs/API.md §4、§5）——
