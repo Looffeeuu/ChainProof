@@ -36,30 +36,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        shell: bash
-        run: |
-          if [[ -f package-lock.json ]]; then
-            npm ci --no-audit --no-fund
-          else
-            echo "::notice::frontend/package-lock.json is not on main yet; using npm install until the frontend PR lands."
-            npm install --package-lock=false --no-audit --no-fund
-          fi
+        run: npm ci --no-audit --no-fund
 
       - name: Build
         run: npm run build
 
-      - name: Run frontend checks when available
+      - name: Locate Chromium for browser checks
         shell: bash
         run: |
-          if node -e "process.exit(require('./package.json').scripts?.check ? 0 : 1)"; then
-            browser="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
-            if [[ -z "$browser" ]]; then
-              echo "::error::A Chromium browser is required for frontend browser and flow checks."
-              exit 1
-            fi
-            CHROME_PATH="$browser" npm run check
-          else
-            echo "::notice::The main branch has no frontend check script yet; it will run when PR #13 is merged."
+          browser="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "$browser" ]]; then
+            echo "::error::A Chromium browser is required for frontend browser and flow checks."
+            exit 1
           fi
+          echo "CHROME_PATH=$browser" >> "$GITHUB_ENV"
+
+      - name: Run frontend checks
+        run: npm run check
