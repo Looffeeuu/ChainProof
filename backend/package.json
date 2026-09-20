@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node --watch src/app.js",
     "start": "node src/app.js",
-    "test": "node --test"
+    "test": "node --test",
+    "smoke:projects": "node scripts/smoke-project-api.mjs"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.0",
