@@ -52,7 +52,9 @@ async function goAs(page, member, path, waitFor) {
   await sleep(400)
 }
 
-/** 页面里常用的小工具，注入一次，各场景直接调 */
+/** 页面里常用的小工具，注入一次，各场景直接调。
+ *  选身份菜单里的项用 `[role=dialog] .row`，不要用 `.panel .row`——
+ *  贡献面板的容器也叫 `.panel`，会选到它的清单行上去 */
 const HELPERS = `
   window.$$ = (sel) => [...document.querySelectorAll(sel)]
   window.$btn = (text) => window.$$('button').find((b) => b.textContent.includes(text))
@@ -268,6 +270,44 @@ async function 超限文件当场拦下(page) {
 }
 
 /**
+ * 从 /verify/某编号 回到 /verify，上一张证书的结论必须消失。
+ *
+ * 不清的话：输入框已经空了，页面上还挂着绿色的「与存证记录一致」——
+ * 等于给一个访客没有查过的编号下了结论。这一页是给项目外的人看的。
+ */
+async function 验证页换编号不留旧结果(page) {
+  await goAs(page, 'alice', '/verify/CERT-P001-ALICE', '.facts')
+  await page.evaluate(HELPERS)
+
+  const r = JSON.parse(await page.evaluate(`(async () => {
+    const before = $text('.verdict')
+
+    // 应用内回到没有编号的 /verify，等同于点页头链接或浏览器后退
+    history.pushState({}, '', '/verify')
+    dispatchEvent(new PopStateEvent('popstate'))
+    await $wait(600)
+    const cleared = {
+      verdict: $text('.verdict'),
+      facts: $$('.facts').length,
+      input: document.querySelector('input[type=search]')?.value ?? null
+    }
+
+    // 再查一个不存在的编号，结论要换成「没有找到」
+    history.pushState({}, '', '/verify/CERT-NOPE')
+    dispatchEvent(new PopStateEvent('popstate'))
+    await $wait(1200)
+    return JSON.stringify({ before, cleared, after: $text('.verdict') })
+  })()`))
+
+  assert('先查到的证书显示「与存证记录一致」', String(r.before).includes('与存证记录一致'), r.before)
+  assert('回到 /verify 后旧结论消失', r.cleared.verdict === null, `还留着：${r.cleared.verdict}`)
+  assert('旧的事实列表也一并消失', r.cleared.facts === 0, `还有 ${r.cleared.facts} 块`)
+  assert('输入框跟着清空', r.cleared.input === '', `输入框里是 ${JSON.stringify(r.cleared.input)}`)
+  assert('换一个不存在的编号，结论换成「没有找到」',
+    String(r.after).includes('没有找到'), r.after)
+}
+
+/**
  * 0% 成员看得到签发按钮，但按钮是灰的，旁边逐字写着接口的那句提示。
  *
  * 组长任务单的验收项：「0% 成员显示正常但不能签发证书」。假数据里没有现成的 0% 成员，
@@ -281,12 +321,18 @@ async function 零贡献成员不能签发(page) {
   const empty = JSON.parse(await page.evaluate(`JSON.stringify({
     disabled: $btn('签发我的贡献证明')?.disabled ?? null,
     why: $text('#issue-blocked'),
-    panel: $text('.empty')
+    panel: $text('.empty'),
+    rows: $$('.legend .row').map((row) => row.textContent.replace(/\s+/g, '')),
+    bar: Boolean(document.querySelector('.bar'))
   })`))
   assert('没有已验证里程碑时按钮在、但灰掉', empty.disabled === true, `disabled=${empty.disabled}`)
   assert('没有已验证里程碑时说清原因', String(empty.why).includes('还没有任何一条里程碑'), empty.why)
-  assert('全员 0% 时面板说「还没有可统计的比例」，不画空横条',
-    String(empty.panel).includes('还没有可统计的贡献比例'), empty.panel)
+  assert('说清为什么都是 0%', String(empty.panel).includes('还没有可统计的贡献比例'), empty.panel)
+  // review 第 5 条：接口返回的是项目全体成员，一条都没验证时也要把人列出来，
+  // 否则这一页看不出项目里有谁
+  assert('全员 0% 时成员仍然逐个列出', empty.rows.length === 2, `列出了 ${empty.rows.length} 人`)
+  assert('列出来的都是 0%', empty.rows.every((r) => r.endsWith('0%')), empty.rows.join(' / '))
+  assert('没有已验证里程碑时不画横条', empty.bar === false, `bar=${empty.bar}`)
 
   await goAs(page, 'alice', '/projects/P003/milestones/new', 'form')
   await page.evaluate(HELPERS)
@@ -316,7 +362,7 @@ async function 零贡献成员不能签发(page) {
     // 应用内切身份，不刷新
     document.querySelector('.trigger').click()
     await $wait(200)
-    $$('.panel .row').find((row) => row.textContent.includes('charlie')).click()
+    $$('[role=dialog] .row').find((row) => row.textContent.includes('charlie')).click()
     await $wait(300)
 
     // 应用内跳转：vue-router 听 popstate，不会整页重载
@@ -335,7 +381,7 @@ async function 零贡献成员不能签发(page) {
 
     document.querySelector('.trigger').click()
     await $wait(200)
-    $$('.panel .row').find((row) => row.textContent.includes('alice')).click()
+    $$('[role=dialog] .row').find((row) => row.textContent.includes('alice')).click()
     await $wait(1800)
     const alice = {
       disabled: $btn('签发我的贡献证明')?.disabled ?? null,
@@ -461,7 +507,7 @@ async function 换身份与刷新(page) {
   const after = JSON.parse(await page.evaluate(`(async () => {
     document.querySelector('.trigger').click()
     await $wait(200)
-    $$('.panel .row').find((r) => r.textContent.includes('bob')).click()
+    $$('[role=dialog] .row').find((r) => r.textContent.includes('bob')).click()
     await $wait(1500)
     return JSON.stringify({
       who: $text('.trigger .name'),
@@ -576,6 +622,7 @@ const SCENARIOS = [
   ['取消哈希后不许提交', 取消哈希后不许提交],
   ['超限文件当场拦下', 超限文件当场拦下],
   ['零贡献成员不能签发', 零贡献成员不能签发],
+  ['验证页换编号不留旧结果', 验证页换编号不留旧结果],
   ['比例超出时横条溢出', 比例超出时横条溢出],
   ['拒绝要二次确认', 拒绝要二次确认],
   ['确认之后有明确反馈', 确认之后有明确反馈],

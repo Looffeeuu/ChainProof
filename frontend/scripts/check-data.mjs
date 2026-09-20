@@ -19,6 +19,9 @@ import { formatDateTime, formatRelative } from '../src/utils/format-time.js'
 import { MAX_FILE_BYTES, MAX_FILE_LABEL, isTooLarge, formatBytes } from '../src/utils/file-limit.js'
 import { API_NAMES, useMock } from '../src/api/mode.js'
 import { readFileSync } from 'node:fs'
+import { createCache } from '../src/stores/create-cache.js'
+import { unwrapVerify } from '../src/api/certificates.js'
+import { verifyVerdict } from '../src/utils/verify-verdict.js'
 
 let failed = 0
 const results = []
@@ -581,6 +584,118 @@ await check('提交里程碑时，前端算出的哈希会被带进新建的里�
     `新建的里程碑 fileHash 是 ${JSON.stringify(created.fileHash)}，应为前端算出的那个`)
   assert(/^[0-9a-f]{64}$/.test(created.fileHash), 'fileHash 不是 64 位小写十六进制')
   return created.fileHash
+})
+
+// —— PR #13 review 查出的三处（阻断项）——
+
+/** 手动控制何时返回的假请求，用来编排乱序 */
+function deferred() {
+  let settle
+  const promise = new Promise((resolve, reject) => { settle = { resolve, reject } })
+  return { promise, ...settle }
+}
+
+await check('缓存：旧身份的响应后到达，也不许覆盖新身份的结果', async () => {
+  // review 阻断项一的复现：alice 的请求还在飞就切到 bob，而 alice 的响应最后才到
+  const calls = []
+  const cache = createCache(() => {
+    const d = deferred()
+    calls.push(d)
+    return d.promise
+  })
+
+  const first = cache.ensure()               // alice 的请求，飞着
+  const second = cache.invalidate()          // 切到 bob：作废 alice，发起 bob
+  assert(calls.length === 2, `发了 ${calls.length} 次请求，应为 2`)
+
+  calls[1].resolve(['bob 的项目'])           // bob 先回
+  await second
+  assert(JSON.stringify(cache.data.value) === '["bob 的项目"]', `bob 回来后缓存是 ${JSON.stringify(cache.data.value)}`)
+
+  calls[0].resolve(['alice 的项目'])         // alice 后回，必须被丢掉
+  await first
+  assert(JSON.stringify(cache.data.value) === '["bob 的项目"]',
+    `alice 的迟到响应把缓存覆盖成了 ${JSON.stringify(cache.data.value)}`)
+
+  // 作废的那次回来时，不许把新请求的 inflight 记录清掉：清了下一个调用方会重复发请求
+  const again = cache.ensure()
+  assert(calls.length === 2, `作废的响应回来后又多发了 ${calls.length - 2} 次请求`)
+  assert(JSON.stringify(await again) === '["bob 的项目"]', '再次 ensure 拿到的不是 bob 的结果')
+  return '迟到的 alice 被丢弃'
+})
+
+await check('缓存：同时发起只打一次请求；失败之后还能重来', async () => {
+  let n = 0
+  let current = null
+  const cache = createCache(() => {
+    n += 1
+    current = deferred()
+    return current.promise
+  })
+
+  const a = cache.ensure()
+  const b = cache.ensure()
+  assert(n === 1, `并发两次调用发了 ${n} 次请求`)
+  current.reject(new Error('网络抖了一下'))
+  await Promise.allSettled([a, b])
+  assert(cache.data.value === null, '失败之后缓存不该有值')
+
+  const c = cache.ensure()
+  assert(n === 2, '失败之后再调用没有重新发起请求')
+  current.resolve(['好了'])
+  assert(JSON.stringify(await c) === '["好了"]', '重试之后没拿到结果')
+  return `${n} 次请求`
+})
+
+await check('公开验证只认 VALID：VERIFIED 不算核验通过', () => {
+  assert(verifyVerdict('VALID') === 'verified', 'VALID 应当是通过')
+  assert(verifyVerdict('VERIFIED') === 'other',
+    'VERIFIED 是里程碑的状态，不是证书的，不能显示成「与存证记录一致」')
+  assert(verifyVerdict('NOT_FOUND') === 'missing', 'NOT_FOUND 应当是查无此证')
+  assert(verifyVerdict('REVOKED') === 'other', '没见过的状态应当走 other')
+  assert(verifyVerdict(undefined) === '' && verifyVerdict('') === '', '没查过时应当是空串')
+  return 'VALID → verified；VERIFIED → other'
+})
+
+await check('VALID 的响应缺本体或编号对不上时，按数据异常抛出，不给结论', () => {
+  const body = {
+    certificateId: 'CERT-X', projectId: 'P001', memberId: 'alice',
+    contributionPercentage: 44, milestoneIds: ['M001'],
+    issuedAt: '2026-09-06T01:00:00.000Z', verificationStatus: 'VALID', txId: 'a'.repeat(64)
+  }
+
+  const ok = unwrapVerify({ certificateId: 'CERT-X', verificationStatus: 'VALID', certificate: body })
+  assert(ok.memberId === 'alice' && ok.verificationStatus === 'VALID', '正常的信封应当被拆成扁平的证书')
+
+  const flat = unwrapVerify({ ...body })
+  assert(flat.memberId === 'alice', '没有信封但字段齐全的响应也应当收下')
+
+  const bad = [
+    ['缺 certificate 本体', { certificateId: 'CERT-X', verificationStatus: 'VALID' }],
+    ['本体缺 milestoneIds', {
+      certificateId: 'CERT-X', verificationStatus: 'VALID',
+      certificate: { ...body, milestoneIds: undefined }
+    }],
+    ['本体的 contributionPercentage 是 null', {
+      certificateId: 'CERT-X', verificationStatus: 'VALID',
+      certificate: { ...body, contributionPercentage: null }
+    }],
+    ['内外层编号对不上', {
+      certificateId: 'CERT-X', verificationStatus: 'VALID',
+      certificate: { ...body, certificateId: 'CERT-别的' }
+    }]
+  ]
+  for (const [label, res] of bad) {
+    let err = null
+    try { unwrapVerify(res) } catch (e) { err = e }
+    assert(err && err.code === 'VERIFY_RESPONSE_INCOMPLETE',
+      `${label}：本该按数据异常处理，实际 ${err ? err.code : '放行了'}`)
+  }
+
+  // 查无此证与其它状态照常交给页面，不抛错
+  const missing = unwrapVerify({ certificateId: 'CP-NOPE', verificationStatus: 'NOT_FOUND' })
+  assert(missing.verificationStatus === 'NOT_FOUND', '查无此证不该被当成异常')
+  return `4 种不完整响应都拦住了`
 })
 
 // —— 累计比例与证书，PR #9 定稿（docs/API.md §4、§5）——

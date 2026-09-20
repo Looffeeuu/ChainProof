@@ -52,7 +52,20 @@ export function useAsync(fn, options = {}) {
     }
   }
 
+  /**
+   * 回到「还没查过」的状态：清掉上一次的结果与错误。
+   *
+   * **要把票据也推进一位**，否则正在飞的那次回来时仍然会写进 data——
+   * 清掉的结果又冒出来，比没清更难理解。
+   */
+  function reset() {
+    ticket += 1
+    data.value = initial
+    error.value = null
+    loading.value = false
+  }
+
   if (immediate) run()
 
-  return { data, loading, error, run }
+  return { data, loading, error, run, reset }
 }

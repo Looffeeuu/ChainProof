@@ -12,6 +12,7 @@ import HashText from '../components/base/HashText.vue'
 import { useAsync } from '../composables/useAsync.js'
 import { verifyCertificate } from '../api/certificates.js'
 import { formatDate } from '../utils/format-time.js'
+import { verifyVerdict } from '../utils/verify-verdict.js'
 
 /**
  * 公开验证页。spec/01 §2.7：极简页，输入 ID → 验证结果。不需要登录。
@@ -25,13 +26,7 @@ const router = useRouter()
 const input = ref(String(route.params.id ?? ''))
 
 // lazy：这一页要等用户输入编号才查，没有 id 时不该显示加载态
-const { data: result, loading, error, run } = useAsync(verifyCertificate, { lazy: true })
-
-// 带 ID 进来（证书上印的就是这种链接）就直接查，不用再点一次
-watch(() => route.params.id, (id) => {
-  input.value = String(id ?? '')
-  if (id) run(String(id))
-}, { immediate: true })
+const { data: result, loading, error, run, reset } = useAsync(verifyCertificate, { lazy: true })
 
 /**
  * 空输入的错误说明。
@@ -41,6 +36,20 @@ watch(() => route.params.id, (id) => {
  * 「这个网站坏了」，而不是「我忘了填」。
  */
 const inputError = ref('')
+
+/**
+ * 带 ID 进来（证书上印的就是这种链接）就直接查，不用再点一次。
+ *
+ * **编号没了就要把上一次的结果清掉。** 从 `/verify/某编号` 回到 `/verify`
+ * （点页头的链接、浏览器后退）时，输入框已经空了，而结果卡片还挂着上一张证书的
+ * 「与存证记录一致」——对一个给外人看的页面，这是在给一个他没有查过的编号下结论。
+ */
+watch(() => route.params.id, (id) => {
+  input.value = String(id ?? '')
+  inputError.value = ''
+  if (id) run(String(id))
+  else reset()
+}, { immediate: true })
 
 function submit() {
   const id = input.value.trim()
@@ -55,20 +64,8 @@ function submit() {
   else router.push(`/verify/${encodeURIComponent(id)}`)
 }
 
-/**
- * 用白名单判断，不用「不等于 NOT_FOUND 就算通过」——后者会把任何没见过的
- * 取值都算成「一致」，页面就会一边说一致一边挂个别的徽章。
- *
- * **证书的取值是 `VALID` 不是 `VERIFIED`**（后者是 Milestone.status 的）。
- * 两者同形不同义，这里把 `VERIFIED` 也一并接受，防后端某处沿用了那套词。
- */
-const verdict = computed(() => {
-  const status = result.value?.verificationStatus
-  if (!status) return ''
-  if (status === 'NOT_FOUND') return 'missing'
-  if (status === 'VALID' || status === 'VERIFIED') return 'verified'
-  return 'other'
-})
+/** 结论怎么判见 utils/verify-verdict.js，那里有白名单为什么只有 VALID 的理由 */
+const verdict = computed(() => verifyVerdict(result.value?.verificationStatus))
 </script>
 
 <template>
