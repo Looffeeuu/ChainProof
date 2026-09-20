@@ -141,7 +141,22 @@ curl http://localhost:3000/api/projects
 
 原始文件保存在链下，Fabric 只存服务端计算出的 SHA-256。
 
-## 11. 第一周验收清单
+## 11. 真实 Project API 冒烟验证
+
+前提：按 `blockchain/network/README.md` 在 Linux/WSL2 的 Docker 环境部署 `chainproof` 链码；在本机 `backend/.env` 配好 Fabric TLS、用户证书和私钥的**绝对路径**，并启动后端。不要提交 `.env`、证书或私钥。
+
+在另一个终端运行：
+
+```bash
+cd backend
+npm run smoke:projects
+```
+
+如后端不在默认地址，可设 `CHAINPROOF_API_URL=http://127.0.0.1:3000/api/`。脚本会在**本地 Fabric 账本中新建一个唯一的演示项目**（不会自动删除），并检查健康状态、Project 创建/读取、`X-Member-Id` 优先级、成员列表过滤、无身份降级，以及链码业务错误到 HTTP 4xx 的映射。成功时输出 `projectId` 和 Fabric `txId`，可留作 #3/#8 的验收记录。
+
+该脚本不会启动 Docker、Fabric 网络或后端；若网络未就绪，不能把本地单元测试通过当作真链路验收。
+
+## 12. 第一周验收清单
 
 - [x] `npm install` 成功
 - [x] `npm run dev` 成功
@@ -152,6 +167,7 @@ curl http://localhost:3000/api/projects
 - [ ] `POST /api/projects` → `CreateProject`
 - [ ] `GET /api/projects/:id` → `GetProject`
 - [ ] `GET /api/projects` → `GetAllProjects` 并按 `X-Member-Id` 过滤
+- [ ] `npm run smoke:projects` 在真实 Fabric 网络上全部通过并记录 projectId / txId
 - [ ] A 线能把 Project 页面从 mock 切换到真实接口
 
 真实 Fabric 联调与 A 线首批 Project API 联调通过后，将 PR #8 从 Draft 转为 Ready；审阅并合并后由 `Closes #3` 自动关闭 Issue #3。
