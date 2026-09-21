@@ -41,7 +41,7 @@ SAMPLES_DIR="$(resolve_samples_dir)" \
 TEST_NETWORK_DIR="${SAMPLES_DIR}/test-network"
 
 export PATH="${SAMPLES_DIR}/bin:${PATH}"
-export FABRIC_CFG_PATH="${TEST_NETWORK_DIR}/configtx"
+export FABRIC_CFG_PATH="${SAMPLES_DIR}/config"
 
 # ---------------------------------------------------------------------------
 # 1. 前置校验
@@ -125,11 +125,13 @@ info "部署链码：name=${CC_NAME} lang=${CC_SRC_LANGUAGE} version=${CC_VERSIO
 
 info "校验链码定义已提交到通道"
 setGlobals 1 >/dev/null
-COMMITTED="$(peer lifecycle chaincode querycommitted --channelID "${CHANNEL_NAME}" --name "${CC_NAME}" 2>/dev/null || true)"
-if echo "${COMMITTED}" | grep -q "Name: ${CC_NAME}"; then
-  success "链码已提交：$(echo "${COMMITTED}" | grep "Name: ${CC_NAME}" | sed 's/^ *//')"
+COMMITTED="$(peer lifecycle chaincode querycommitted --channelID "${CHANNEL_NAME}" --name "${CC_NAME}" 2>&1)" \
+  || fatal "无法查询通道 ${CHANNEL_NAME} 上的链码 ${CC_NAME}：${COMMITTED}"
+if [[ "${COMMITTED}" == *"Committed chaincode definition for chaincode '${CC_NAME}' on channel '${CHANNEL_NAME}':"* ]] \
+  && [[ "${COMMITTED}" == *"Version: ${CC_VERSION}, Sequence: ${CC_SEQUENCE}"* ]]; then
+  success "链码已提交：${CC_NAME} ${CC_VERSION}/sequence ${CC_SEQUENCE}"
 else
-  fatal "链码 ${CC_NAME} 未提交到通道 ${CHANNEL_NAME}。deployCC 输出如下时请检查上面的日志。"
+  fatal "链码 ${CC_NAME} 的提交定义与预期版本或 sequence 不符：${COMMITTED}"
 fi
 
 info "用一次真实查询验证链码可执行"
