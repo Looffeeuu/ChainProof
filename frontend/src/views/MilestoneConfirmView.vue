@@ -102,7 +102,7 @@ const successText = computed(() => {
     return '已记录你的确认。声明里的成员全部确认完毕，这条记录已经写入存证。'
   }
   if (waitingFor.value.length) {
-    return `已记录你的确认。还在等 ${waitingFor.value.join('、')} 表态，全部确认后才会写入存证。`
+    return `已记录你的确认。还在等 ${waitingFor.value.join('、')} 表态。`
   }
   return '已记录你的确认。'
 })
@@ -116,7 +116,7 @@ const successText = computed(() => {
  * 确认不拦：它推进流程，不终止流程。
  */
 async function decide(decision) {
-  if (decision === 'REJECTED' && !window.confirm('拒绝之后这条声明作废，需要提交者修改后重新提交，而且你的表态不能撤回。确定拒绝吗？')) {
+  if (decision === 'REJECTED' && !window.confirm('拒绝后这条声明作废，提交者要改完重新提交。表态不能撤回，确定拒绝？')) {
     return
   }
   deciding.value = decision
@@ -236,7 +236,7 @@ async function decide(decision) {
         <template v-if="gate.can">
           <p class="ask">
             这份声明把 <strong class="t-nums">{{ gate.share }}%</strong>
-            记在你名下。与实际情况相符吗？
+            记在你名下。
           </p>
           <p class="t-small t-soft note">
             全员确认后写入存证，一人拒绝则整条作废。<strong>表态不能撤回。</strong>

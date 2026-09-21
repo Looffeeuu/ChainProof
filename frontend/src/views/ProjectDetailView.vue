@@ -226,7 +226,7 @@ async function issueCertificate() {
 
             <template v-else>
               <p v-if="canIssue" class="t-small t-soft t-nums">
-                你的累计贡献比例是 {{ myShare }}%，签发后以这个数为准，之后的变化不影响证书。
+                签发后以当前的 {{ myShare }}% 为准。
               </p>
               <p v-else id="issue-blocked" class="t-small t-soft">{{ issueBlockedReason }}</p>
               <BaseButton
@@ -269,7 +269,6 @@ async function issueCertificate() {
           v-if="milestones.length === 0"
           icon="chain"
           title="这个项目还没有里程碑"
-          description="提交成果后会出现在这条时间线上。"
         >
           <template #action>
             <BaseButton variant="primary" @click="$router.push(newMilestonePath)">

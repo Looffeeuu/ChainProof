@@ -48,7 +48,6 @@ const isEmpty = computed(() => data.value?.length === 0)
           <EmptyState
             icon="box"
             title="还没有任何项目"
-            description="创建后会出现在这里，卡片上会显示里程碑的存证进度。"
           >
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects/new')">
