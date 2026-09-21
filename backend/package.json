@@ -8,7 +8,10 @@
     "start": "node src/app.js"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.10.0",
+    "@hyperledger/fabric-gateway": "^1.7.0",
     "cors": "latest",
+    "dotenv": "^16.4.0",
     "express": "latest",
     "multer": "latest"
   }
