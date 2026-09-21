@@ -41,10 +41,10 @@ TEST_NETWORK_DIR="${SAMPLES_DIR}/test-network"
 
 cd "${TEST_NETWORK_DIR}"
 
-# network.sh 自己会 export PATH=${ROOTDIR}/../bin 与 FABRIC_CFG_PATH=${PWD}/configtx，
-# 这里额外导出一次，供本脚本直接调用 peer 时使用。
+# network.sh 自己使用 configtx 生成通道配置；本脚本直接调用 peer 时
+# 则必须使用包含 core.yaml 的 fabric-samples/config。
 export PATH="${SAMPLES_DIR}/bin:${PATH}"
-export FABRIC_CFG_PATH="${TEST_NETWORK_DIR}/configtx"
+export FABRIC_CFG_PATH="${SAMPLES_DIR}/config"
 
 # ---------------------------------------------------------------------------
 
