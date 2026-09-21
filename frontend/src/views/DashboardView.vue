@@ -104,7 +104,6 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
           <EmptyState
             icon="box"
             title="还没有任何项目"
-            description="创建第一个项目之后，这里会显示存证进度与最近活动。"
           >
             <template #action>
               <BaseButton variant="primary" @click="$router.push('/projects/new')">
@@ -163,7 +162,6 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
           v-if="data.recent.length === 0"
           icon="chain"
           title="还没有里程碑"
-          description="提交成果后会出现在这里。"
         />
 
         <ul v-else class="feed">
@@ -196,7 +194,7 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
           v-if="data.certificates.length === 0"
           icon="certificate"
           title="你还没有签发过贡献证明"
-          description="项目里有里程碑通过全员确认后，在项目详情页签发。"
+          description="在项目详情页签发。"
         />
 
         <ul v-else class="feed">

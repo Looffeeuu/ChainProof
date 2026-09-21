@@ -38,11 +38,11 @@ const milestoneCount = computed(() => props.certificate.milestoneIds?.length ?? 
     <p class="figure t-nums">{{ certificate.contributionPercentage }}<span class="unit">%</span></p>
 
     <p class="t-small t-soft basis">
-      比例来自项目成员提交并经确认的贡献声明，按项目全部已确认的里程碑等权累计，为签发时的数值。下列是其中该成员参与的 {{ milestoneCount }} 条。
+      比例按项目全部已确认的里程碑等权累计，为签发时的数值。
     </p>
 
     <section class="block">
-      <h2 class="t-label">参与的里程碑</h2>
+      <h2 class="t-label">参与的里程碑（{{ milestoneCount }} 条）</h2>
       <ul class="ids">
         <li v-for="id in certificate.milestoneIds" :key="id" class="t-mono">{{ id }}</li>
       </ul>

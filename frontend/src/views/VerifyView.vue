@@ -126,7 +126,6 @@ const verdict = computed(() => verifyVerdict(result.value?.verificationStatus))
         <template v-else>查到了这份证书，但它现在不是有效状态。</template>
         <StatusBadge :status="result.verificationStatus" />
       </p>
-      <p v-if="verdict === 'other'" class="t-small t-soft">以下内容来自存证记录。</p>
 
       <!-- 每个字段各自兜底，不假设它一定在。
            这一块 verdict 为 'verified' 和 'other' 时共用，而 'other' 的意思就是

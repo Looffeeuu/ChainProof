@@ -113,7 +113,7 @@ function onDrop(event) {
         </svg>
       </span>
       <span class="drop-main">把{{ label }}拖到这里，或点击选择</span>
-      <span class="t-small t-soft">核对不会上传文件，哈希在你的浏览器里算完就结束了</span>
+      <span class="t-small t-soft">文件不会上传，哈希在你浏览器里算。</span>
     </label>
 
     <p v-if="busy" class="line t-small t-soft" role="status">
@@ -132,8 +132,8 @@ function onDrop(event) {
     <div v-else-if="matches !== null" class="result" :class="matches ? 'is-hit' : 'is-miss'" role="status" aria-live="polite">
       <p class="verdict">
         <span class="mark" aria-hidden="true">{{ matches ? '●' : '✕' }}</span>
-        <template v-if="matches">一致。你手上的这份就是存证记录里的那一份。</template>
-        <template v-else>对不上。这份文件与存证记录里的不是同一份。</template>
+        <template v-if="matches">一致，是同一份文件。</template>
+        <template v-else>对不上，不是同一份文件。</template>
       </p>
       <p class="t-small t-soft name">{{ fileName }}</p>
       <div v-if="!matches" class="compare">

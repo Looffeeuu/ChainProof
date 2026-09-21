@@ -152,7 +152,7 @@ function giveRemainderTo(memberId) {
             step="1"
             class="t-nums"
             :value="c.percentage"
-            :aria-label="`${c.memberId} 的贡献比例，百分数`"
+            :aria-label="`${c.memberId} 的贡献比例`"
             @input="setPercentage(c.memberId, $event.target.value)"
           />
           <span class="t-small t-soft">%</span>
@@ -164,7 +164,7 @@ function giveRemainderTo(memberId) {
           type="button"
           class="t-small link fill"
           :disabled="valid"
-          :aria-label="`把 ${Math.abs(remaining)}% 记到 ${c.memberId} 头上`"
+          :aria-label="remaining >= 0 ? `给 ${c.memberId} 补 ${remaining}%` : `从 ${c.memberId} 减 ${-remaining}%`"
           @click="giveRemainderTo(c.memberId)"
         >
           {{ remaining >= 0 ? `补 ${remaining}%` : `减 ${-remaining}%` }}
