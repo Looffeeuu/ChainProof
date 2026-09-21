@@ -15,6 +15,35 @@ import { session } from '../stores/session.js'
 import { listMilestones } from './milestones.js'
 import { listCertificates } from './certificates.js'
 import { getProject, getContributions } from './projects.js'
+import { useMock, isReal } from './mode.js'
+
+/**
+ * 主数据走真接口、附属数据还走假数据时，**假数据的回答不算数**。
+ *
+ * 这是 2026-09-21 第二次联调反馈出的缺陷，比第一次隐蔽：`listMilestones` 还走假数据，
+ * 而假数据对任何一个不认识的项目 ID 都**不报错，直接返回 `[]`**。上一版只接住了
+ * Promise 拒绝，于是这个空数组被当成「成功」，页面照着它说「这个项目还没有里程碑」——
+ * 把一句我们根本不知道的话，说得像一件已经核实过的事。
+ *
+ * 所以判断不能只看调用成不成，要看**这个接口切了没有**：没切就是不可知，
+ * 连调都不必调（调了也只会拿到假数据的答案，还可能把假数据的错误原文摆给用户看）。
+ *
+ * 三种结果各有各的意思，页面要分别对待：
+ *
+ *   { ok: true, value }          拿到了，这是事实
+ *   { ok: false, notWired: true } 这个接口还没接入真实数据，**不可知**
+ *   { ok: false, error }          接口切了但这次失败了，把后端的说法显示给用户
+ *
+ * @param {string} name 附属接口在 `api/mode.js` API_NAMES 里的名字
+ * @param {() => Promise<any>} call 真正发请求的调用
+ * @param {{ primary: string, isMock: (name: string) => boolean }} ctx
+ */
+function attach(name, call, { primary, isMock }) {
+  if (!isMock(primary) && isMock(name)) {
+    return Promise.resolve({ ok: false, notWired: true })
+  }
+  return call().then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }))
+}
 
 /**
  * 每个项目连同它自己的里程碑。项目列表页与概览页共用。
@@ -26,6 +55,14 @@ import { getProject, getContributions } from './projects.js'
  */
 export async function projectsWithMilestones() {
   const projects = await ensureProjects()
+
+  // 项目已经是链上的、里程碑接口还没切时，假数据对每个链上项目都会返回 []。
+  // 那不是「这个项目没有里程碑」，是「不知道」——`milestones` 给 null，
+  // 让卡片和统计去说「未接入」，而不是画一条 0 的进度条
+  if (isReal('listProjects') && !isReal('listMilestones')) {
+    return projects.map((project) => ({ project, milestones: null }))
+  }
+
   const lists = await Promise.all(projects.map((p) => listMilestones(p.projectId)))
   return projects.map((project, i) => ({ project, milestones: lists[i] }))
 }
@@ -53,11 +90,19 @@ export async function overview() {
   ])
 
   const projects = rows.map((r) => r.project)
-  const milestones = rows.flatMap((r) => r.milestones)
+
+  /* 里程碑与证书**未接入时是不可知的，不是 0**。概览页的三块数字照这两个旗标
+     决定是报数还是报「未接入」——报一个假的 0，用户会当成已经核实过的事实。 */
+  const milestonesKnown = rows.every((r) => r.milestones !== null)
+  const certificatesKnown = isReal('listProjects') ? isReal('listCertificates') : true
+
+  const milestones = milestonesKnown ? rows.flatMap((r) => r.milestones) : []
   const nameOf = new Map(projects.map((p) => [p.projectId, p.name]))
 
   return {
     projects,
+    milestonesKnown,
+    certificatesKnown,
     // 带上项目名。概览是跨项目的一屏，只给 projectId 读者认不出是哪个项目——
     // 同一页上面的里程碑列表本来就显示名字，两处口径要一致
     certificates: certificates.map((c) => ({
@@ -106,21 +151,20 @@ export async function loadProjectDetail(projectId, deps = {}) {
     getProject: fetchProject = getProject,
     listMilestones: fetchMilestones = listMilestones,
     getContributions: fetchContributions = getContributions,
-    listCertificates: fetchCertificates = listCertificates
+    listCertificates: fetchCertificates = listCertificates,
+    isMock = useMock
   } = deps
 
-  /** 把一次调用变成「成了还是没成」，而不是让它掀桌 */
-  const settle = (promise) =>
-    promise.then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }))
+  const ctx = { primary: 'getProject', isMock }
 
   // 四个调用仍然并发——串行要多等三个来回。区别只在于谁有权让整页失败：
   // getProject 直接挂在 Promise.all 上（它 404，这一页就该是 404），
-  // 其余三个先被 settle 接住，永远不会 reject
+  // 其余三个经过 attach，既不会 reject，也不会把假数据的答案当成事实
   const [project, milestones, contributions, certificates] = await Promise.all([
     fetchProject(projectId),
-    settle(fetchMilestones(projectId)),
-    settle(fetchContributions(projectId)),
-    settle(fetchCertificates({ projectId }))
+    attach('listMilestones', () => fetchMilestones(projectId), ctx),
+    attach('getContributions', () => fetchContributions(projectId), ctx),
+    attach('listCertificates', () => fetchCertificates({ projectId }), ctx)
   ])
 
   return { project, milestones, contributions, certificates }

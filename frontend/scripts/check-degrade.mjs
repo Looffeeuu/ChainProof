@@ -17,6 +17,17 @@
  * `check:contract` 全真接口。而「逐接口切换」的定义本身就是中间那一段混着跑，
  * 那一段一条检查都没有。这个脚本补的就是那一段。
  *
+ * —— 第二次反馈：只接住拒绝是不够的 ——
+ *
+ * 上面那版改完，整页 404 没了，但页面仍然显示「总数 0 / 这个项目还没有里程碑」。
+ * 原因是 `listMilestones` 还走假数据，而**假数据对不认识的项目 ID 不报错，直接返回 `[]`**。
+ * 只接住 Promise 拒绝的话，这个空数组会被当成一次成功，于是「不知道」被画成了「确实没有」。
+ * 贡献那一块更糟：假数据抛的「没有找到项目 P-SMOKE-…」被原样显示给了用户，
+ * 而那个项目在链上真实存在。
+ *
+ * 所以判断的依据不是「这次调用成没成」，而是**这个接口切了没有**：
+ * 没切就是不可知，连调都不必调。下面 §2 的几条就是钉这个的。
+ *
  * —— 怎么在没有后端的机器上测 ——
  *
  * 用替身：`loadProjectDetail` 的第二个参数可以注入四个调用。
@@ -64,7 +75,9 @@ async function 真项目其余仍是假数据() {
       getProject: async () => chainProject,
       listMilestones: notFound,
       getContributions: notFound,
-      listCertificates: notFound
+      listCertificates: notFound,
+      // 四个都已经切到真接口，失败就是真的失败（不是「还没接入」）
+      isMock: () => false
     })
   } catch (e) {
     assert('真项目不该因为别的接口失败而打不开', false, `整个抛了 ${e.code ?? e.message}`)
@@ -101,7 +114,8 @@ async function 项目本身不存在() {
       getProject: notFound,
       listMilestones: async () => [],
       getContributions: async () => ({ members: [], basedOnMilestones: 0 }),
-      listCertificates: async () => []
+      listCertificates: async () => [],
+      isMock: () => false
     })
     assert('项目本身 404 时整页要失败', false, '没有抛错，页面会显示一个空壳')
   } catch (e) {
@@ -115,7 +129,8 @@ async function 全部就绪() {
     getProject: async () => chainProject,
     listMilestones: async () => [{ milestoneId: 'M-1', status: 'VERIFIED' }],
     getContributions: async () => ({ members: [{ memberId: 'alice', percentage: 100 }], basedOnMilestones: 1 }),
-    listCertificates: async () => [{ certificateId: 'CERT-1', memberId: 'alice' }]
+    listCertificates: async () => [{ certificateId: 'CERT-1', memberId: 'alice' }],
+    isMock: () => false
   })
 
   assert('三块都标成拿到了',
@@ -136,7 +151,8 @@ async function 只有一块没切() {
     getProject: async () => chainProject,
     listMilestones: async () => [{ milestoneId: 'M-1', status: 'VERIFIED' }],
     getContributions: async () => ({ members: [{ memberId: 'alice', percentage: 100 }], basedOnMilestones: 1 }),
-    listCertificates: notFound
+    listCertificates: notFound,
+    isMock: () => false
   })
 
   assert('没失败的那几块照常可用', result.milestones.ok && result.contributions.ok,
@@ -144,8 +160,85 @@ async function 只有一块没切() {
   assert('只有失败的那一块被标出来', result.certificates.ok === false, `ok=${result.certificates.ok}`)
 }
 
+/**
+ * §2 假数据不报错、直接返回空数组时。**这是第二次联调反馈的那个缺陷。**
+ *
+ * 真接口：getProject。还没切：listMilestones（假数据对任何链上 ID 都回 `[]`）、
+ * getContributions（假数据抛「没有找到项目」）。
+ */
+async function 假数据回空数组不算事实() {
+  let 调用次数 = 0
+  const result = await loadProjectDetail(chainProject.projectId, {
+    getProject: async () => chainProject,
+    listMilestones: async () => { 调用次数 += 1; return [] },   // 假数据的沉默的空
+    getContributions: async () => { 调用次数 += 1; return notFound() },
+    listCertificates: async () => { 调用次数 += 1; return [] },
+    // getProject 已切真接口，其余三个还是假数据
+    isMock: (name) => name !== 'getProject'
+  })
+
+  assert('空数组不算「确实没有」', result.milestones.ok === false,
+    `ok=${result.milestones.ok}，value=${JSON.stringify(result.milestones.value)}`)
+  assert('标成「还没接入」而不是「失败」', result.milestones.notWired === true,
+    `notWired=${result.milestones.notWired}`)
+  assert('未接入时不给 value', result.milestones.value === undefined,
+    JSON.stringify(result.milestones.value))
+
+  // 未接入的接口根本不该被调用：调了也只会拿到假数据的答案，
+  // 而它的错误原文（「没有找到项目 P-SMOKE-…」）一旦漏到界面上，会把人带沟里
+  assert('未接入的接口一次都没调', 调用次数 === 0, `调了 ${调用次数} 次`)
+  assert('未接入时不带假数据的错误原文', result.contributions.error === undefined,
+    String(result.contributions.error?.message ?? '（没有）'))
+  assert('贡献与证书同样标成未接入',
+    result.contributions.notWired === true && result.certificates.notWired === true,
+    `${result.contributions.notWired} / ${result.certificates.notWired}`)
+}
+
+/**
+ * §3 **真接口自己返回空数组**——这时候空就是事实，必须照常当成「确实没有」。
+ * 上一条的修法不能把真接口的空也一起打成「不可知」。
+ */
+async function 真接口回空数组就是事实() {
+  const result = await loadProjectDetail(chainProject.projectId, {
+    getProject: async () => chainProject,
+    listMilestones: async () => [],
+    getContributions: async () => ({ members: [], basedOnMilestones: 0 }),
+    listCertificates: async () => [],
+    isMock: () => false            // 全都切到真接口了
+  })
+
+  assert('真接口的空数组算数', result.milestones.ok === true && result.milestones.value.length === 0,
+    `ok=${result.milestones.ok}`)
+  assert('不会被误标成未接入', result.milestones.notWired === undefined,
+    `notWired=${result.milestones.notWired}`)
+}
+
+/**
+ * §4 **全部走假数据**，也就是本机日常开发的样子。
+ * 这时候假数据就是唯一的数据源，它的空数组当然算数——
+ * 不能因为上面两条把本地开发也搞成一片「未接入」。
+ */
+async function 全假数据时一切照旧() {
+  const result = await loadProjectDetail('P001', {
+    getProject: async () => ({ ...chainProject, projectId: 'P001' }),
+    listMilestones: async () => [],
+    getContributions: async () => ({ members: [], basedOnMilestones: 0 }),
+    listCertificates: async () => [],
+    isMock: () => true             // 一个都没切
+  })
+
+  assert('全假数据时三块都是成功', 
+    result.milestones.ok && result.contributions.ok && result.certificates.ok,
+    `${result.milestones.ok} / ${result.contributions.ok} / ${result.certificates.ok}`)
+  assert('全假数据时不标未接入', result.milestones.notWired === undefined,
+    `notWired=${result.milestones.notWired}`)
+}
+
 const SCENARIOS = [
   ['真项目 + 其余仍是假数据', 真项目其余仍是假数据],
+  ['假数据回空数组不算事实', 假数据回空数组不算事实],
+  ['真接口回空数组就是事实', 真接口回空数组就是事实],
+  ['全假数据时一切照旧', 全假数据时一切照旧],
   ['项目本身不存在', 项目本身不存在],
   ['全部就绪', 全部就绪],
   ['只有一块没切', 只有一块没切]

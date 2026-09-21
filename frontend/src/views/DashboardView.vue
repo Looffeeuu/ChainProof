@@ -38,12 +38,17 @@ const stats = computed(() => {
   const ratio = total === 0 ? 0 : Math.round((d.verifiedCount / total) * 100)
   const coveredProjects = new Set(d.certificates.map((c) => c.projectId)).size
 
+  /* 未接入的接口给不出事实。**这时候报「0」是在编一个数**——
+     用户没法分辨「确实没有」和「还没接上」，而这两件事的下一步完全不同。
+     所以值显示「—」，注脚说清为什么（api/queries.js 的 overview）。 */
+  const unknown = { value: '—', note: '数据还没接通' }
+
   return [
     {
       key: 'projects',
       label: '项目',
       value: d.projects.length,
-      note: `共 ${total} 条里程碑`,
+      note: d.milestonesKnown ? `共 ${total} 条里程碑` : '里程碑还没接通',
       icon: 'layers',
       tone: 'primary',
       to: '/projects'
@@ -51,8 +56,10 @@ const stats = computed(() => {
     {
       key: 'verified',
       label: '已验证里程碑',
-      value: d.verifiedCount,
-      note: total === 0 ? '还没有里程碑' : `占全部 ${total} 条的 ${ratio}%`,
+      value: d.milestonesKnown ? d.verifiedCount : unknown.value,
+      note: d.milestonesKnown
+        ? (total === 0 ? '还没有里程碑' : `占全部 ${total} 条的 ${ratio}%`)
+        : unknown.note,
       icon: 'check',
       tone: 'verified',
       to: '/projects'
@@ -60,8 +67,10 @@ const stats = computed(() => {
     {
       key: 'certificates',
       label: '我的贡献证明',
-      value: d.certificates.length,
-      note: coveredProjects === 0 ? '尚未签发' : `覆盖 ${coveredProjects} 个项目`,
+      value: d.certificatesKnown ? d.certificates.length : unknown.value,
+      note: d.certificatesKnown
+        ? (coveredProjects === 0 ? '尚未签发' : `覆盖 ${coveredProjects} 个项目`)
+        : unknown.note,
       icon: 'certificate',
       tone: 'chain',
       // 证书没有单独的列表页，点这个数字没地方可去。不给 to，就渲染成普通方块，
@@ -158,8 +167,13 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
 
         <!-- 有项目但一条里程碑都没有，是个正常状态（刚建完项目就是这样）。
              不给空状态的话，这张卡只剩一个标题，下面一片空白，看起来像坏了 -->
+        <!-- 未接入时不能落到「还没有里程碑」那一屏：那是一句结论 -->
+        <p v-if="!data.milestonesKnown" class="t-small t-soft not-wired">
+          里程碑还没接通，暂时看不到。
+        </p>
+
         <EmptyState
-          v-if="data.recent.length === 0"
+          v-else-if="data.recent.length === 0"
           icon="chain"
           title="还没有里程碑"
         />
@@ -190,8 +204,12 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
           <BaseButton variant="ghost" @click="$router.push('/verify')">公开验证</BaseButton>
         </template>
 
+        <p v-if="!data.certificatesKnown" class="t-small t-soft not-wired">
+          贡献证明还没接通，暂时看不到。
+        </p>
+
         <EmptyState
-          v-if="data.certificates.length === 0"
+          v-else-if="data.certificates.length === 0"
           icon="certificate"
           title="你还没有签发过贡献证明"
           description="在项目详情页签发。"
@@ -276,6 +294,9 @@ const isEmpty = computed(() => data.value?.projects.length === 0)
 .block { margin-bottom: var(--sp-4); }
 
 .feed { list-style: none; margin: 0; padding: 0; }
+
+/* 这两张卡是 padding="none"，里面的说明要自己补内边距 */
+.not-wired { margin: 0; padding: var(--sp-5) var(--sp-4); }
 
 .feed-item {
   display: flex;
