@@ -347,7 +347,7 @@ async function submit() {
               v-slot="f"
               label="成果文件"
               required
-              :hint="`单个文件不超过 ${MAX_FILE_LABEL}。写进链上的只有它的 SHA-256。`"
+              :hint="`单个文件不超过 ${MAX_FILE_LABEL}。文件会上传保存，链上只记录其 SHA-256。`"
               :error="touched.file ? errors.file : ''"
             >
               <!-- aria-invalid 不能漏。focusFirstInvalid 找的就是它，
