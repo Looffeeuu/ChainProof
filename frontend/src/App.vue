@@ -1,53 +1,82 @@
+<template>
+  <div id="app-root">
+    <nav class="navbar">
+      <div class="container navbar-inner">
+        <router-link to="/" class="navbar-brand">ChainProof</router-link>
+        <div class="navbar-links">
+          <router-link to="/">Dashboard</router-link>
+          <router-link to="/projects">Projects</router-link>
+          <router-link to="/certificates">Certificates</router-link>
+          <router-link to="/verify">Verify</router-link>
+        </div>
+        <div class="identity-switcher">
+          <label>Identity:</label>
+          <select :value="identity.currentMember" @change="identity.setMember($event.target.value)">
+            <option v-for="m in identity.members" :key="m" :value="m">{{ m }}</option>
+          </select>
+        </div>
+      </div>
+    </nav>
+    <main class="container main-content">
+      <router-view />
+    </main>
+  </div>
+</template>
+
 <script setup>
-const stats = [
-  { label: 'Projects', value: '1' },
-  { label: 'Verified milestones', value: '0' },
-  { label: 'Certificates', value: '0' }
-]
+import { useIdentityStore } from './stores/identity.js'
+const identity = useIdentityStore()
 </script>
 
-<template>
-  <main class="shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">BLOCKCHAIN CONTRIBUTION VERIFICATION</p>
-        <h1>ChainProof</h1>
-        <p class="subtitle">Make every team contribution traceable and verifiable.</p>
-      </div>
-      <span class="status">Development MVP</span>
-    </header>
-
-    <section class="hero card">
-      <div>
-        <p class="eyebrow">COURSE PROJECT</p>
-        <h2>Trusted evidence for collaborative work</h2>
-        <p>
-          Submit milestones, hash project files, confirm contribution claims,
-          and verify the final record through Hyperledger Fabric.
-        </p>
-      </div>
-      <div class="flow">
-        <span>Submit</span><b>→</b><span>Confirm</span><b>→</b><span>Verify</span>
-      </div>
-    </section>
-
-    <section class="stats">
-      <article v-for="item in stats" :key="item.label" class="card stat">
-        <strong>{{ item.value }}</strong>
-        <span>{{ item.label }}</span>
-      </article>
-    </section>
-
-    <section class="card roadmap">
-      <p class="eyebrow">MVP WORKFLOW</p>
-      <ol>
-        <li>Create a team project</li>
-        <li>Submit a milestone and calculate SHA-256</li>
-        <li>Allocate member contribution percentages</li>
-        <li>Collect member confirmations</li>
-        <li>Write verified evidence to Fabric</li>
-        <li>Generate and verify a contribution certificate</li>
-      </ol>
-    </section>
-  </main>
-</template>
+<style scoped>
+.navbar {
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.navbar-inner {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  gap: 32px;
+}
+.navbar-brand {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--c-primary);
+}
+.navbar-brand:hover { text-decoration: none; }
+.navbar-links {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+}
+.navbar-links a {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--c-text-secondary);
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+.navbar-links a:hover,
+.navbar-links a.router-link-exact-active {
+  color: var(--c-primary);
+  border-bottom-color: var(--c-primary);
+  text-decoration: none;
+}
+.identity-switcher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.identity-switcher select {
+  padding: 4px 8px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.main-content { padding-top: 24px; padding-bottom: 48px; }
+</style>
