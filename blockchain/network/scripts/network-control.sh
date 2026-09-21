@@ -44,7 +44,7 @@ cd "${TEST_NETWORK_DIR}"
 # network.sh 自己会 export PATH=${ROOTDIR}/../bin 与 FABRIC_CFG_PATH=${PWD}/configtx，
 # 这里额外导出一次，供本脚本直接调用 peer 时使用。
 export PATH="${SAMPLES_DIR}/bin:${PATH}"
-export FABRIC_CFG_PATH="${TEST_NETWORK_DIR}/configtx"
+export FABRIC_CFG_PATH="${SAMPLES_DIR}/config"
 
 # ---------------------------------------------------------------------------
 
@@ -79,7 +79,8 @@ cmd_up() {
   # 通道是否真的建好
   info "校验通道 ${CHANNEL_NAME}"
   # shellcheck source=/dev/null
-  source scripts/envVar.sh
+  export OVERRIDE_ORG="" VERBOSE="false"
+  set +u; source scripts/envVar.sh; set -u
   setGlobals 1
   if peer channel list 2>/dev/null | grep -q "${CHANNEL_NAME}"; then
     success "通道 ${CHANNEL_NAME} 已创建，peer0.org1 已加入"
@@ -146,7 +147,8 @@ cmd_status() {
   if [[ -d "${TEST_NETWORK_DIR}/organizations/peerOrganizations" ]]; then
     info "通道列表"
     # shellcheck source=/dev/null
-    source scripts/envVar.sh
+    export OVERRIDE_ORG="" VERBOSE="false"
+    set +u; source scripts/envVar.sh; set -u
     setGlobals 1 >/dev/null 2>&1
     peer channel list 2>/dev/null || warn "无法查询通道列表"
 

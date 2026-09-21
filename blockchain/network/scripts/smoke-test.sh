@@ -54,11 +54,12 @@ TEST_NETWORK_DIR="${SAMPLES_DIR}/test-network"
 
 cd "${TEST_NETWORK_DIR}"
 export PATH="${SAMPLES_DIR}/bin:${PATH}"
-export FABRIC_CFG_PATH="${TEST_NETWORK_DIR}/configtx"
+export FABRIC_CFG_PATH="${SAMPLES_DIR}/config"
 
 command -v jq >/dev/null 2>&1 || fatal "需要 jq 来安全构造交易参数：sudo apt-get install -y jq"
 # shellcheck source=/dev/null
-source scripts/envVar.sh
+export OVERRIDE_ORG="" VERBOSE="false"
+set +u; source scripts/envVar.sh; set -u
 setGlobals 1 >/dev/null
 
 peer channel list 2>/dev/null | grep -q "${CHANNEL_NAME}" \
@@ -85,7 +86,7 @@ PEER_CONN_PARMS=(
 invoke_tx() {
   local fn="$1"; shift
   local args_json
-  args_json="$(jq -n --arg fn "${fn}" --args "$@" '{function: $fn, Args: $args}')"
+  args_json="$(jq -n --arg fn "${fn}" '{function: $fn, Args: $ARGS.positional}' --args "$@")"
 
   TX_OUT="$(peer chaincode invoke \
     -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com \
@@ -102,7 +103,7 @@ invoke_tx() {
 query_tx() {
   local fn="$1"; shift
   local args_json
-  args_json="$(jq -n --arg fn "${fn}" --args "$@" '{function: $fn, Args: $args}')"
+  args_json="$(jq -n --arg fn "${fn}" '{function: $fn, Args: $ARGS.positional}' --args "$@")"
 
   TX_OUT="$(peer chaincode query \
     -C "${CHANNEL_NAME}" -n "${CC_NAME}" \
@@ -401,10 +402,10 @@ if [[ ${TX_RC} -eq 0 ]]; then
     assert_json_field "Certificate.contributionPercentage" "${CERT_JSON}" '.contributionPercentage' "50"
     assert_json_field "Certificate.verificationStatus" "${CERT_JSON}" '.verificationStatus' "VALID"
     assert_json_field "Certificate 带 txId" "${CERT_JSON}" '(.txId | length) > 0' "true"
-    CERT_MILESTONE_FILTER="[.milestoneIds] | index(\"${MILESTONE_ID}\") != null"
+    CERT_MILESTONE_FILTER=".milestoneIds | index(\"${MILESTONE_ID}\") != null"
     assert_json_field "milestoneIds 含 VERIFIED 里程碑" "${CERT_JSON}" "${CERT_MILESTONE_FILTER}" "true"
     assert_json_field "milestoneIds 不含 REJECTED 里程碑" "${CERT_JSON}" \
-      "[.milestoneIds] | index(\"${REJECTED_MID}\") == null" "true"
+      ".milestoneIds | index(\"${REJECTED_MID}\") == null" "true"
   else
     fail "GetCertificate 查询失败：$(printf '%s' "${TX_OUT}" | tail -3 | tr '\n' ' ')"
   fi

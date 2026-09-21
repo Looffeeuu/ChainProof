@@ -41,7 +41,7 @@ SAMPLES_DIR="$(resolve_samples_dir)" \
 TEST_NETWORK_DIR="${SAMPLES_DIR}/test-network"
 
 export PATH="${SAMPLES_DIR}/bin:${PATH}"
-export FABRIC_CFG_PATH="${TEST_NETWORK_DIR}/configtx"
+export FABRIC_CFG_PATH="${SAMPLES_DIR}/config"
 
 # ---------------------------------------------------------------------------
 # 1. 前置校验
@@ -59,7 +59,8 @@ fi
 # 通道必须已存在，否则 deployCC 会在 commit 阶段失败并给出难懂的报错
 cd "${TEST_NETWORK_DIR}"
 # shellcheck source=/dev/null
-source scripts/envVar.sh
+export OVERRIDE_ORG="" VERBOSE="false"
+set +u; source scripts/envVar.sh; set -u
 setGlobals 1 >/dev/null
 if ! peer channel list 2>/dev/null | grep -q "${CHANNEL_NAME}"; then
   fatal "通道 ${CHANNEL_NAME} 不存在。请先运行：./chainproof-network.sh up"
@@ -126,8 +127,8 @@ info "部署链码：name=${CC_NAME} lang=${CC_SRC_LANGUAGE} version=${CC_VERSIO
 info "校验链码定义已提交到通道"
 setGlobals 1 >/dev/null
 COMMITTED="$(peer lifecycle chaincode querycommitted --channelID "${CHANNEL_NAME}" --name "${CC_NAME}" 2>/dev/null || true)"
-if echo "${COMMITTED}" | grep -q "Name: ${CC_NAME}"; then
-  success "链码已提交：$(echo "${COMMITTED}" | grep "Name: ${CC_NAME}" | sed 's/^ *//')"
+if echo "${COMMITTED}" | grep -q "Committed chaincode definition"; then
+  success "链码已提交：$(echo "${COMMITTED}" | grep 'Version:' | sed 's/^ *//')"
 else
   fatal "链码 ${CC_NAME} 未提交到通道 ${CHANNEL_NAME}。deployCC 输出如下时请检查上面的日志。"
 fi
