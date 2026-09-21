@@ -63,13 +63,17 @@ if [[ -n "${EXISTING}" && -d "${EXISTING}/test-network" ]]; then
 else
   info "克隆 fabric-samples 到 ${FABRIC_SAMPLES_DIR}"
   mkdir -p "$(dirname "${FABRIC_SAMPLES_DIR}")"
-  git clone --depth 50 "${SAMPLES_REPO}" "${FABRIC_SAMPLES_DIR}" \
+  git -c core.autocrlf=false clone --depth 50 "${SAMPLES_REPO}" "${FABRIC_SAMPLES_DIR}" \
     || fatal "克隆 fabric-samples 失败，请检查网络或代理设置。"
   FABRIC_SAMPLES_DIR="${FABRIC_SAMPLES_DIR}"
   TEST_NETWORK_DIR="${FABRIC_SAMPLES_DIR}/test-network"
 fi
 
 cd "${FABRIC_SAMPLES_DIR}"
+# 防止后续切换 ref 时被用户的全局 core.autocrlf=true 转回 CRLF。
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  git config core.autocrlf false
+fi
 
 # ---------------------------------------------------------------------------
 # 2. 检出指定 ref
@@ -110,6 +114,15 @@ else
     fi
   fi
 fi
+
+# 已有 samples 可能在全局 core.autocrlf=true 下检出为 CRLF。
+# 改 Git 配置不会修复已检出的文件，先给出明确报错而不是等 bash\r 异常。
+for required_lf in network.sh network.config scripts/envVar.sh; do
+  if [[ -f "${TEST_NETWORK_DIR}/${required_lf}" ]] \
+    && LC_ALL=C grep -q $'\r' "${TEST_NETWORK_DIR}/${required_lf}"; then
+    fatal "${TEST_NETWORK_DIR}/${required_lf} 使用 CRLF；请先将已有 fabric-samples 的 test-network 文本转换为 LF 后重试。"
+  fi
+done
 
 # ---------------------------------------------------------------------------
 # 3. 下载与 FABRIC_VERSION 严格对齐的二进制
@@ -244,5 +257,5 @@ EOF
 
 # 把最终确定的 samples 目录写到一个临时文件，供同一次 setup 流程里的后续脚本读取。
 # 不能靠环境变量传递：chainproof-network.sh 是分多次 bash 调用子脚本的。
-echo "${FABRIC_SAMPLES_DIR}" > "${HOME}/.chainproof/samples-dir" 2>/dev/null \
-  || { mkdir -p "${HOME}/.chainproof" && echo "${FABRIC_SAMPLES_DIR}" > "${HOME}/.chainproof/samples-dir"; }
+mkdir -p "${HOME}/.chainproof"
+printf '%s\n' "${FABRIC_SAMPLES_DIR}" > "${HOME}/.chainproof/samples-dir"
