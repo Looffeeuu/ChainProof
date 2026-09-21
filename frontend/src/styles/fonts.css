@@ -1,0 +1,42 @@
+/* 自带字体。全部文件在 ../assets/fonts/，随构建打进 dist——
+   不连 CDN、不要求目标机器装字体，内网离线环境直接可用。
+
+   为什么必须自带：`--font-sans` 里写 Inter 而不提供字体文件，
+   整站会实际渲染成 Segoe UI + 微软雅黑，规范 §2.3 里那套
+   tabular-nums / slashed-zero 全部落空——雅黑没有这些 OpenType 特性，
+   600 字重也是系统合成的伪粗体。而哈希、比例、时间戳恰恰是
+   这个产品最依赖排版质量的地方。
+
+   为什么中文不自带：一个中文字重的 woff2 是 2–4 MB，
+   打进去 dist 会从三百多 KB 涨到十兆以上。拉丁与数字自带（88 KB），
+   中文走系统栈——Windows 有微软雅黑、macOS 有苹方，都不需要准备。 */
+
+/* Inter Variable，wght 100–900 单文件。SIL Open Font License 1.1，
+   许可证原文在 ../assets/fonts/Inter-LICENSE.txt */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;         /* 可变字体：一个文件覆盖全部字重，不再有伪粗体 */
+  font-display: swap;
+  src: url('../assets/fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+  /* 限定在拉丁区。中文字符直接落到栈里的下一个字体，
+     不必等这个文件下载完（虽然它就在本地，但语义上更准确） */
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* JetBrains Mono Variable。哈希与交易 ID 是这个产品的视觉母题，
+   出现频率比正文还高，值得给它一套真正为代码设计的等宽字：
+   零带斜线、1/l/I 三者字形分明——链上标识符读错一位就是另一条记录。
+   SIL Open Font License 1.1，原文在 ../assets/fonts/JetBrainsMono-LICENSE.txt */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191,
+    U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

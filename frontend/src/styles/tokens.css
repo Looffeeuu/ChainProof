@@ -1,0 +1,146 @@
+/* 设计令牌：全工程唯一允许出现颜色与尺寸字面量的文件。
+   来源与理由见 ../../../../spec/01-设计系统.md §2，暗色部分见 §2.8。
+   改这里之前先改那份规范。
+
+   —— 亮暗两套值怎么写 ——
+
+   用 CSS 的 light-dark()：每个令牌一行，亮色在前、暗色在后。
+
+   之前的写法是三个块——:root 一套亮色，@media (prefers-color-scheme: dark) 一套暗色，
+   :root[data-theme='dark'] 再抄一遍同样的暗色。文件顶上还写着一句
+   「下面两处引用同一份，避免同样的二十个值抄两遍」，而实现就是逐字两份。
+   那句注释是假话，它预言的风险不是「将来会有」，是「当时就有」：
+   加一个暗色令牌要记得在两处都加，漏了不报错，表现是
+   「跟随系统时正常，手动切暗色时那一个颜色不对」——这种缺陷极难被发现，
+   因为大多数时候只会测其中一条路径。
+
+   light-dark() 把「三套值」变成「一套值两列」，改的时候两个值都在眼前，
+   而且强制主题从「重抄一遍颜色」退化成「只改 color-scheme」，
+   概念上也更接近事实。
+
+   一个必须记住的连带条件：scripts/check-contrast.mjs 解析这个文件的正则
+   要同时认得 `--c-x: #hex;` 与 `--c-x: light-dark(#hex, #hex);`。
+   认不得的话它一个令牌都解析不到，然后**静默通过**——
+   一个假装在检查的脚本比没有脚本更危险。改这里记得回去看那个正则。 */
+
+:root {
+  /* 声明本站两种配色都支持。它有两个作用：
+     一是浏览器自己画的那部分（画布底色、滚动条、表单控件默认样式）跟着走，
+     二是下面所有 light-dark() 的取值依据。 */
+  color-scheme: light dark;
+
+  /* —— 表面：四档，不是两档 ——
+       bg      页面底，最远
+       sunken  卡片**内部**再凹进去一层：哈希槽、表头、代码块、分段控件的轨道
+       surface 卡片，正常平面
+       raised  真正浮起来的东西：下拉、弹层
+
+     亮色下 surface 与 raised 同为纯白，靠边框与投影分开——白纸上再叠一层白纸
+     就是这么区分的；暗色下没有投影可用，所以必须真的提亮一档。 */
+  --c-bg:      light-dark(#eef1f6, #0e1116);
+  --c-sunken:  light-dark(#f4f6fa, #11151b);
+  --c-surface: light-dark(#ffffff, #161a21);
+  --c-raised:  light-dark(#ffffff, #1f242d);
+
+  --c-border-subtle: light-dark(#e0e5ee, #282e38);  /* 装饰性分隔 */
+  --c-border-strong: light-dark(#7a8496, #727c8d);  /* 控件边框，需满足 WCAG SC 1.4.11 的 3:1 */
+
+  --c-text:      light-dark(#0f172a, #e7eaf0);
+  --c-text-soft: light-dark(#55607a, #9fa9bb);
+
+  /* 主色 = 操作。分成几个令牌不是为了好看，是因为一个值在暗色下没法同时胜任
+     两件事：实心填充要够深才压得住白字，文字要够亮才读得清（spec/01 §2.8.2）。 */
+  --c-primary:       light-dark(#2f3ac9, #4550e0);  /* 实心填充：主按钮背景 */
+  --c-primary-hover: light-dark(#262ea6, #5a64ea);  /* 亮色压暗、暗色提亮，同色相 */
+  --c-primary-text:  light-dark(#2f3ac9, #94a8ff);  /* 文字与图标：链接、选中项 */
+  --c-on-primary:    light-dark(#ffffff, #ffffff);  /* 压在实心主色上的文字 */
+  --c-primary-weak:  light-dark(#e8eaff, #1a1f45);  /* 浅底：选中行、标签底 */
+
+  /* 存证色 = 这个产品在讲的那件事。主色管「你可以点的东西」，
+     存证色管「链上那条线」：时间线竖轴、哈希、交易 ID、证书封边。
+     它承载的是内容而不是控件——这是「单调」与「有性格」的分界。 */
+  --c-chain:      light-dark(#0d7490, #4fc3d9);
+  --c-chain-weak: light-dark(#e0f2f7, #0e2a33);
+
+  /* 焦点环。取文字色而不是主色：暗色下 --c-primary(#4550e0) 压在卡片上
+     只有 2.89:1、压在弹层上 2.58:1，达不到 WCAG SC 1.4.11 对
+     「识别控件所必需的部分」要求的 3:1——也就是说键盘用户在最常见的场景里
+     看不清自己聚焦在哪。文字色在八个表面上最低 12.73:1，全部达标，
+     一个令牌就够，不需要再套一层反差色的外环。
+
+     （SC 编号：Focus Appearance 是 2.4.13，AAA 级；焦点指示器 3:1
+     这条在 AA 级的出处是 1.4.11 Non-text Contrast，就是定
+     --c-border-strong 用的同一条。） */
+  --c-focus: light-dark(#0f172a, #e7eaf0);
+
+  /* 状态三色。绿往「更绿更深」推了一点，和存证青拉开 */
+  --c-verified: light-dark(#0a6c3d, #3dd68c);  --c-verified-bg: light-dark(#e4f4ea, #0f2a1d);
+  --c-pending:  light-dark(#8a4b06, #ffca16);  --c-pending-bg:  light-dark(#fdf3e4, #2a2109);
+  --c-rejected: light-dark(#b02318, #ff9592);  --c-rejected-bg: light-dark(#fdece9, #2d1516);
+
+  /* 人物色。四支，循环使用，折算规则在 utils/member-tone.js。
+
+     **不能借用状态色。** 拿 --c-verified / --c-pending / --c-rejected 当区分色，
+     同一页上绿色就既是「链上已验证」又是「bob」。颜色在一套界面里只能有
+     一个意思，否则它不再传达任何意思。
+
+     这四支的色相刻意避开三个状态色（绿 150°、琥珀 40°、红 10°）：
+     靛 240° / 青 193° / 紫 275° / 品红 330°。 */
+  --c-member-1: light-dark(#3d3fc4, #98a4ff);  --c-member-1-weak: light-dark(#e7e8fb, #1c2150);
+  --c-member-2: light-dark(#0d7490, #4fc3d9);  --c-member-2-weak: light-dark(#ddf0f6, #0e2a33);
+  --c-member-3: light-dark(#8145c9, #c4a0f5);  --c-member-3-weak: light-dark(#f0e8fb, #251a3f);
+  --c-member-4: light-dark(#b8306e, #ff9ac4);  --c-member-4-weak: light-dark(#fce6ef, #38162a);
+
+  /* —— 间距：8px 基数，八档 —— */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+
+  /* —— 排版：七档 —— */
+  --fs-display: clamp(26px, 3.4vw, 34px);
+  --fs-heading: 20px;
+  --fs-lead: 17px;
+  --fs-body: 15px;
+  --fs-small: 13px;
+  --fs-label: 12px;
+  --fs-stat: 28px;   /* 统计数字。它是数据不是标题，单独一档 */
+
+  /* —— 圆角三档 —— */
+  --r-xs: 6px;   /* 徽章、哈希槽、小按钮 */
+  --r-sm: 8px;   /* 按钮、输入框 */
+  --r-lg: 14px;  /* 卡片、弹层 */
+
+  /* —— 投影三档 ——
+     颜色也走 light-dark()：暗色下投影几乎不可见，必须加重，
+     分层主要靠表面变亮 + 边框，投影只补一点纵深。 */
+  --shadow-sm:
+    0 1px 2px light-dark(rgba(15, 23, 42, .05), rgba(0, 0, 0, .4));
+  --shadow-md:
+    0 2px 4px light-dark(rgba(15, 23, 42, .05), rgba(0, 0, 0, .3)),
+    0 8px 16px -6px light-dark(rgba(15, 23, 42, .10), rgba(0, 0, 0, .5));
+  --shadow-lg:
+    0 8px 12px -6px light-dark(rgba(15, 23, 42, .08), rgba(0, 0, 0, .4)),
+    0 20px 40px -12px light-dark(rgba(15, 23, 42, .22), rgba(0, 0, 0, .7));
+
+  /* —— 动效三档 ——
+     进入与退出不能同速：退出时用户的意图已经明确，等动画播完是纯粹的延迟，
+     所以退出要更快（约为进入的 0.7 倍）。 */
+  --ease-in:  160ms cubic-bezier(.2, .6, .3, 1);  /* 进入、展开、悬停 */
+  --ease-out: 110ms cubic-bezier(.4, 0, 1, 1);    /* 退出、收起：起步就走 */
+  --ease-tap:  90ms cubic-bezier(.2, .6, .3, 1);  /* 按下等即时反馈 */
+  /* 兼容别名。现有引用不必一次改完，新代码直接用上面三个 */
+  --ease: var(--ease-in);
+
+  /* —— 字体 ——
+     Inter 与 JetBrains Mono 由 fonts.css 自带（拉丁与数字）；中文落到系统栈。
+     栈的顺序按排版质量排，不是按平台排。 */
+  --font-sans: Inter, "Noto Sans SC", "Source Han Sans SC", "PingFang SC",
+    "Microsoft YaHei UI", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono",
+    Consolas, "Noto Sans Mono", monospace;
+}
+
+/* 用户在设置里强制选了某一套。只需要把 color-scheme 摆正——
+   上面所有 light-dark() 会自动跟着取另一列，不需要重抄任何颜色。
+   这正是换掉三块写法最直接的收益。 */
+:root[data-theme='light'] { color-scheme: light; }
+:root[data-theme='dark']  { color-scheme: dark; }
