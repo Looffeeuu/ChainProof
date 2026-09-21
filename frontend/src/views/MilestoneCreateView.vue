@@ -270,7 +270,7 @@ async function submit() {
       contributors: contributors.value.filter((c) => c.percentage > 0)
     })
     submitted.value = true
-    setFlash(`「${created.title}」已提交存证，正在等待成员确认。`)
+    setFlash(`「${created.title}」已提交，等待成员确认。`)
     router.push(`/milestones/${created.milestoneId}`)
   } catch (e) {
     submitError.value = e
@@ -284,10 +284,7 @@ async function submit() {
   <div>
     <!-- 面包屑走 PageHeader 的插槽，占眉标的位置。不要在它上面再写一行眉标，
          那是同一个位置上下两行说同一件事 -->
-    <PageHeader
-      title="提交里程碑"
-      description="文件本身不会写进链上，写进去的是它的 SHA-256 与这份贡献声明。"
-    >
+    <PageHeader title="提交里程碑">
       <template #breadcrumb>
         <nav class="crumbs t-small t-soft" aria-label="面包屑">
           <RouterLink to="/projects">项目</RouterLink>
@@ -350,7 +347,7 @@ async function submit() {
               v-slot="f"
               label="成果文件"
               required
-              :hint="`单个文件不超过 ${MAX_FILE_LABEL}。文件会上传保存，写进链上的只有它的 SHA-256。`"
+              :hint="`单个文件不超过 ${MAX_FILE_LABEL}。写进链上的只有它的 SHA-256。`"
               :error="touched.file ? errors.file : ''"
             >
               <!-- aria-invalid 不能漏。focusFirstInvalid 找的就是它，

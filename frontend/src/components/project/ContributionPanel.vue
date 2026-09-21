@@ -32,13 +32,13 @@ const rows = computed(() => asObjectList(props.members))
        而是还没有任何声明走完确认流程。 -->
   <div v-if="rows.length === 0" class="empty">
     <p class="t-soft">还没有可统计的贡献比例。</p>
-    <p class="t-small t-soft">里程碑通过全员确认后，这里会出现每人的累计占比。</p>
+    <p class="t-small t-soft">全员确认过的里程碑才计入。</p>
   </div>
 
   <div v-else class="panel">
     <div v-if="basedOnMilestones === 0" class="empty">
       <p class="t-soft">还没有可统计的贡献比例。</p>
-      <p class="t-small t-soft">里程碑通过全员确认后，这里会出现每人的累计占比。</p>
+      <p class="t-small t-soft">全员确认过的里程碑才计入。</p>
     </div>
 
     <div v-else class="bar" role="img" :aria-label="rows.map((m) => `${m.memberId} ${m.percentage}%`).join('，')">
