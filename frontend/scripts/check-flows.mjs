@@ -54,7 +54,10 @@ async function goAs(page, member, path, waitFor) {
 
 /** 页面里常用的小工具，注入一次，各场景直接调。
  *  选身份菜单里的项用 `[role=dialog] .row`，不要用 `.panel .row`——
- *  贡献面板的容器也叫 `.panel`，会选到它的清单行上去 */
+ *  贡献面板的容器也叫 `.panel`，会选到它的清单行上去
+ *
+ *  `$wait(固定毫秒)` 与 `$until(条件)` 的区别，是这份脚本稳不稳的关键，
+ *  见下面「为什么不用固定等待」一段。新写的场景一律用 `$until`。 */
 const HELPERS = `
   window.$$ = (sel) => [...document.querySelectorAll(sel)]
   window.$btn = (text) => window.$$('button').find((b) => b.textContent.includes(text))
@@ -65,7 +68,79 @@ const HELPERS = `
     return dt.files
   }
   window.$wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+  /**
+   * 等到 fn() 返回真值为止，返回那个值；等不到就抛一句说得出是在等什么的错。
+   *
+   * what 是给失败信息用的：超时抛的是「等不到：确认按钮」，
+   * 而不是一句在 JSON.parse 里炸开的 SyntaxError。
+   */
+  window.$until = async (fn, what, ms = 15000) => {
+    const deadline = Date.now() + ms
+    for (;;) {
+      let v = null
+      try { v = fn() } catch { v = null }
+      if (v) return v
+      if (Date.now() > deadline) throw new Error('等不到：' + what)
+      await new Promise((r) => setTimeout(r, 50))
+    }
+  }
+
+  /**
+   * 等这一页的取数都结束。
+   *
+   * AsyncSection 加载中渲染的是 .loading-slot（components/base/AsyncSection.vue），
+   * 它不在了就说明四个并发请求都回来、数据已经画出来了。
+   * 这是个与断言本身无关的信号——用它等，不会把「值最后自己变对了」
+   * 也算成通过。
+   */
+  window.$settled = () => window.$until(
+    () => !document.querySelector('.loading-slot'), '页面取数结束'
+  )
+
+  /** 应用内切身份：等菜单真的弹出来、等身份真的换了、等换完之后的取数结束。
+   *  AppShell 的 RouterView 绑了 :key="currentMemberId"，切身份会整个重挂，
+   *  所以这里必须等 $settled()，否则读到的是上一个身份的那一帧 */
+  window.$pick = async (who) => {
+    (await window.$until(() => document.querySelector('.trigger'), '身份菜单的触发器')).click()
+    ;(await window.$until(
+      () => window.$$('[role=dialog] .row').find((row) => row.textContent.includes(who)),
+      '身份菜单里的 ' + who
+    )).click()
+    await window.$until(() => window.$text('.trigger .name') === who, '身份切到 ' + who)
+    await window.$settled()
+  }
+
+  /** 应用内跳转：vue-router 听 popstate，不会整页重载。
+   *  ready 是这一页画出来了的标志，等到它、再等取数结束 */
+  window.$goto = async (path, ready, what) => {
+    history.pushState({}, '', path)
+    dispatchEvent(new PopStateEvent('popstate'))
+    await window.$until(() => location.pathname === path && ready(), what || ('打开 ' + path))
+    await window.$settled()
+  }
 `
+
+/**
+ * 在页面里跑一段返回 JSON 的代码，并把页面里抛的错**原样抛出来**。
+ *
+ * `page.evaluate` 在页面抛错时返回的是 `"EXC: …"` 字符串。直接 JSON.parse 它，
+ * 得到的是一句 `SyntaxError: Unexpected token E`——真正的原因（哪一步没等到）
+ * 全丢了，排查只能靠重跑。这一层把它还原成一句能读的失败信息。
+ */
+async function evalJSON(page, expression) {
+  const raw = await page.evaluate(expression)
+  if (typeof raw === 'string' && raw.startsWith('EXC:')) {
+    // 页面里抛的是 Error，描述自带一个 "Error: " 前缀；外层打印时还会再加一个
+    // 类名，留着就成了「Error: Error: 等不到：确认按钮」
+    throw new Error(raw.slice(4).trim().split('\n')[0].replace(/^Error:\s*/, ''))
+  }
+  try {
+    return JSON.parse(raw)
+  } catch {
+    throw new Error(`页面返回的不是 JSON：${String(raw).slice(0, 200)}`)
+  }
+}
 
 // ——————————————————————————————————————————————————————————
 // 场景
@@ -313,18 +388,38 @@ async function 验证页换编号不留旧结果(page) {
  * 组长任务单的验收项：「0% 成员显示正常但不能签发证书」。假数据里没有现成的 0% 成员，
  * 所以现场造一个：P003（alice、charlie）里提交一条只有 alice 的里程碑并确认，
  * 然后**不刷新页面**切到 charlie——一刷新，内存里的假数据就还原了。
+ *
+ * —— 为什么不用固定等待 ——
+ *
+ * 这个场景是全部十三个里链最长的一条：填表 → 算哈希 → 提交 → 落到详情页 → 确认
+ * → 切身份 → 跳项目页 → 再切回去，中间跨了五次取数。原来每一步都是
+ * `$wait(1500)` / `$wait(1800)` 这样的固定睡眠，而假数据每次调用要 200–600ms
+ * 随机延时（mock/handlers.js），项目详情页一次并发四个请求，切身份还会因为
+ * `RouterView :key="currentMemberId"` 整个重挂再取一轮。
+ *
+ * 机器空闲时这些固定值够用，CI 上跑满核时就不一定——**2026-09-20 组长在 PR #14
+ * 的首次运行里撞到的就是这个**：同一个提交重跑一次就过了。赌赢与赌输之间没有
+ * 任何代码差异，这种检查失败一次就不再有人信它。
+ *
+ * 所以这条场景里不再有固定睡眠：每一步都 `$until(...)` 等一个**说得出名字的**
+ * 标志出现——哈希算完了、路由到了、确认反馈出来了、取数结束了。
+ * 等到就立刻往下走（比原来快），等不到就抛「等不到：确认按钮」，
+ * 而不是在下一行悄悄读到 null。
  */
 async function 零贡献成员不能签发(page) {
   // 先看 N = 0 的情况：一条已验证的都没有，按钮同样灰掉，但说的是另一个原因
   await goAs(page, 'charlie', '/projects/P003', '.issue')
   await page.evaluate(HELPERS)
-  const empty = JSON.parse(await page.evaluate(`JSON.stringify({
-    disabled: $btn('签发我的贡献证明')?.disabled ?? null,
-    why: $text('#issue-blocked'),
-    panel: $text('.empty'),
-    rows: $$('.legend .row').map((row) => row.textContent.replace(/\s+/g, '')),
-    bar: Boolean(document.querySelector('.bar'))
-  })`))
+  const empty = await evalJSON(page, `(async () => {
+    await $settled()
+    return JSON.stringify({
+      disabled: $btn('签发我的贡献证明')?.disabled ?? null,
+      why: $text('#issue-blocked'),
+      panel: $text('.empty'),
+      rows: $$('.legend .row').map((row) => row.textContent.replace(/\\s+/g, '')),
+      bar: Boolean(document.querySelector('.bar'))
+    })
+  })()`)
   assert('没有已验证里程碑时按钮在、但灰掉', empty.disabled === true, `disabled=${empty.disabled}`)
   assert('没有已验证里程碑时说清原因', String(empty.why).includes('还没有任何一条里程碑'), empty.why)
   assert('说清为什么都是 0%', String(empty.panel).includes('还没有可统计的贡献比例'), empty.panel)
@@ -336,7 +431,7 @@ async function 零贡献成员不能签发(page) {
 
   await goAs(page, 'alice', '/projects/P003/milestones/new', 'form')
   await page.evaluate(HELPERS)
-  const r = JSON.parse(await page.evaluate(`(async () => {
+  const r = await evalJSON(page, `(async () => {
     const title = document.querySelector('input[type=text]')
     title.value = '只有 alice 的成果'
     title.dispatchEvent(new Event('input', { bubbles: true }))
@@ -344,31 +439,28 @@ async function 零贡献成员不能签发(page) {
     const fi = document.querySelector('input[type=file]')
     fi.files = $file('a.txt', 1024)
     fi.dispatchEvent(new Event('change', { bubbles: true }))
+    // 哈希没算完，提交按钮本来就会拦下来——等它真的出来，不要赌
+    await $until(() => document.querySelector('.hash-line'), '文件哈希算完')
 
     // P003 的成员顺序是 alice、charlie：alice 100，charlie 0
     const nums = $$('.rows input[type=number]')
     nums[0].value = 100
     nums[0].dispatchEvent(new Event('input', { bubbles: true }))
-    await $wait(600)
+    await $until(() => $text('.total') === '100', '比例合计变成 100')
 
-    $btn('提交并存证').click()
-    await $wait(1500)
+    ;(await $until(() => $btn('提交并存证'), '提交按钮')).click()
+    await $until(() => location.pathname.startsWith('/milestones/M'), '提交后落到里程碑详情页')
     const milestonePath = location.pathname
+    await $settled()
 
-    $btn('确认这份声明').click()
-    await $wait(1500)
+    ;(await $until(() => $btn('确认这份声明'), '确认按钮')).click()
+    // .done 是确认成功后的那句反馈；它出来了，这一步才算真的走完
+    await $until(() => document.querySelector('.done'), '确认成功的反馈')
+    await $settled()
     const badge = $text('.badge')
 
-    // 应用内切身份，不刷新
-    document.querySelector('.trigger').click()
-    await $wait(200)
-    $$('[role=dialog] .row').find((row) => row.textContent.includes('charlie')).click()
-    await $wait(300)
-
-    // 应用内跳转：vue-router 听 popstate，不会整页重载
-    history.pushState({}, '', '/projects/P003')
-    dispatchEvent(new PopStateEvent('popstate'))
-    await $wait(1800)
+    await $pick('charlie')
+    await $goto('/projects/P003', () => $btn('签发我的贡献证明'), '以 charlie 打开 P003')
 
     const btn = $btn('签发我的贡献证明')
     const rows = $$('.legend .row').map((row) => row.textContent.replace(/\\s+/g, ''))
@@ -379,16 +471,15 @@ async function 零贡献成员不能签发(page) {
       rows
     }
 
-    document.querySelector('.trigger').click()
-    await $wait(200)
-    $$('[role=dialog] .row').find((row) => row.textContent.includes('alice')).click()
-    await $wait(1800)
+    // 切回 alice：页面还是这一页，但 RouterView 会重挂并重取一轮
+    await $pick('alice')
+    await $until(() => $btn('签发我的贡献证明'), '切回 alice 之后的签发按钮')
     const alice = {
       disabled: $btn('签发我的贡献证明')?.disabled ?? null,
       note: $text('.issue p')
     }
     return JSON.stringify({ milestonePath, badge, charlie, alice })
-  })()`))
+  })()`)
 
   assert('里程碑提交并确认成已验证', String(r.badge).includes('链上已验证'), `${r.milestonePath} · ${r.badge}`)
   assert('0% 成员仍然出现在面板里', r.charlie.rows.some((x) => x.includes('charlie') && x.endsWith('0%')),
@@ -632,6 +723,19 @@ const SCENARIOS = [
   ['验证页摆得出事实', 验证页摆得出事实]
 ]
 
+/**
+ * 两个只在排查时用的开关，默认都不开，CI 跑的还是完整的一整套：
+ *
+ *   FLOWS_ONLY=零贡献   只跑名字里含这几个字的场景
+ *   FLOWS_SLOW=4        把页面 JS 的执行速度降到 1/4（CDP 的 CPU 节流）
+ *
+ * 后一个是用来**证明一条场景稳不稳**的：时序问题在空闲的本机上复现不出来，
+ * 把 CPU 压到 1/4 就接近 CI 跑满核时的样子。改过等待逻辑之后，
+ * 用 `FLOWS_ONLY=… FLOWS_SLOW=4` 连跑几遍，比在 CI 上碰运气快得多。
+ */
+const only = process.env.FLOWS_ONLY ?? ''
+const slowdown = Number(process.env.FLOWS_SLOW ?? 1)
+
 async function main() {
   if (!existsSync(join(distDir, 'index.html'))) {
     console.log('SKIP  dist/ 里没有 index.html，先跑 npm run build')
@@ -643,13 +747,23 @@ async function main() {
     process.exit(0)
   }
 
+  const scenarios = only ? SCENARIOS.filter(([name]) => name.includes(only)) : SCENARIOS
+  if (scenarios.length === 0) {
+    console.log(`FLOWS_ONLY=${only} 没有匹配到任何场景。`)
+    process.exit(1)
+  }
+
   const page = await open(distDir)
   await page.send('Emulation.setDeviceMetricsOverride', {
     width: 1280, height: 900, deviceScaleFactor: 1, mobile: false
   })
+  if (slowdown > 1) {
+    await page.send('Emulation.setCPUThrottlingRate', { rate: slowdown })
+    console.log(`（CPU 节流 ${slowdown}×）\n`)
+  }
 
   try {
-    for (const [name, run] of SCENARIOS) {
+    for (const [name, run] of scenarios) {
       console.log(`—— ${name} ——`)
       const from = results.length
       try {
@@ -678,7 +792,7 @@ async function main() {
   const failed = results.filter((r) => !r.ok).length
   console.log(
     failed === 0
-      ? `${SCENARIOS.length} 个交互场景、${results.length} 项断言，全部通过。`
+      ? `${scenarios.length} 个交互场景、${results.length} 项断言，全部通过。`
       : `${results.length} 项断言里 ${failed} 项不通过。`
   )
   process.exit(failed === 0 ? 0 : 1)
