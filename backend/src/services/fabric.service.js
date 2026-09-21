@@ -30,15 +30,32 @@ function getGateway () {
   return { gateway, contract }
 }
 
-const CHAINCODE_ERROR_RE = /^([A-Z_]+):\s*(.+)$/s
+const KNOWN_CODES = new Set([
+  'PROJECT_NOT_FOUND', 'MILESTONE_NOT_FOUND', 'CERTIFICATE_NOT_FOUND',
+  'CONTRIBUTION_TOTAL_INVALID', 'MEMBER_NOT_IN_CLAIM', 'ALREADY_DECIDED',
+  'MILESTONE_CLOSED', 'VALIDATION_ERROR', 'NO_VERIFIED_CONTRIBUTION',
+])
 
-export function parseChaincodeError (err) {
-  const msg = err?.message || ''
-  const match = msg.match(CHAINCODE_ERROR_RE)
-  if (match) {
-    return { code: match[1], message: match[2].trim() }
+function extractCode (text) {
+  if (!text) return null
+  const parts = text.split(/,\s*/)
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const match = parts[i].match(/^([A-Z][A-Z_]{2,}):\s*(.+)$/)
+    if (match && KNOWN_CODES.has(match[1])) {
+      return { code: match[1], message: match[2].trim() }
+    }
   }
   return null
+}
+
+export function parseChaincodeError (err) {
+  if (Array.isArray(err?.details)) {
+    for (const d of err.details) {
+      const found = extractCode(d?.message)
+      if (found) return found
+    }
+  }
+  return extractCode(err?.message)
 }
 
 const ERROR_HTTP_STATUS = {
