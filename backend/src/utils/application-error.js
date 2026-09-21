@@ -13,7 +13,7 @@ const CHAINCODE_ERROR_STATUS = Object.freeze({
 
 export function mapApplicationError(error) {
   const message = error instanceof Error ? error.message : String(error ?? '')
-  const structured = parseChaincodeError(message)
+  const structured = (Array.isArray(error?.details) ? error.details : []).map((detail) => parseChaincodeError(String(detail?.message ?? ""))).find(Boolean) ?? parseChaincodeError(message)
   if (structured) return structured
 
   let match = message.match(/Project\s+([^\s]+)\s+does not exist/i)

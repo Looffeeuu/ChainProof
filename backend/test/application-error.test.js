@@ -25,7 +25,20 @@ for (const [code, status] of structuredCases) {
     })
   })
 }
+test('maps business error from Fabric Gateway endorsement details', () => {
+  const error = new Error('10 ABORTED: failed to endorse transaction')
+  error.details = [{
+    address: 'peer0.org1.example.com:7051',
+    message: 'chaincode response 500, VALIDATION_ERROR: 项目 P001 已经存在，不能重复创建。',
+    mspId: 'Org1MSP'
+  }]
 
+  assert.deepEqual(mapApplicationError(error), {
+    status: 400,
+    code: 'VALIDATION_ERROR',
+    message: '项目 P001 已经存在，不能重复创建。'
+  })
+})
 test('keeps compatibility with the original English Chaincode errors', () => {
   assert.deepEqual(mapApplicationError(new Error('Project P001 does not exist')), {
     status: 404,
