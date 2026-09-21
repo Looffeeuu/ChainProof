@@ -14,9 +14,8 @@ import ContributionBreakdown from '../components/project/ContributionBreakdown.v
 import MilestoneTimeline from '../components/milestone/MilestoneTimeline.vue'
 import ErrorNotice from '../components/base/ErrorNotice.vue'
 import { useAsync } from '../composables/useAsync.js'
-import { getProject, getContributions } from '../api/projects.js'
-import { listMilestones } from '../api/milestones.js'
-import { listCertificates, createCertificate } from '../api/certificates.js'
+import { loadProjectDetail } from '../api/queries.js'
+import { createCertificate } from '../api/certificates.js'
 import { formatDate } from '../utils/format-time.js'
 import { session } from '../stores/session.js'
 import { markVisited } from '../stores/recent.js'
@@ -30,18 +29,12 @@ import { confirmGate } from '../utils/confirm-gate.js'
 const route = useRoute()
 const router = useRouter()
 
-async function load(projectId) {
-  // 四个接口互不依赖，并发发出。串行的话页面要多等三个来回
-  const [project, milestones, contributions, certificates] = await Promise.all([
-    getProject(projectId),
-    listMilestones(projectId),
-    getContributions(projectId),
-    listCertificates({ projectId })
-  ])
-  return { project, milestones, contributions, certificates }
-}
-
-const { data, loading, error, run } = useAsync(load)
+/**
+ * 取数分两等：**项目本身决定这一页成不成，其余三块各自独立**。
+ * 编排在 `api/queries.js` 的 `loadProjectDetail` 里，那里写了为什么
+ * （2026-09-21 联调撞的那个 bug）。
+ */
+const { data, loading, error, run } = useAsync(loadProjectDetail)
 
 // 监听路由参数而不是只在 onMounted 取一次：
 // 从项目 A 的详情页直接跳到项目 B 时，组件会被复用，onMounted 不会再触发
@@ -53,7 +46,17 @@ const project = computed(() => data.value?.project)
 // 放在取数成功之后而不是路由变化时：链接里的 ID 可能是错的，
 // 把一个 404 记进「最近访问」只会让侧栏多一条点不开的项
 watch(project, (p) => p && markVisited(p.projectId))
-const milestones = computed(() => data.value?.milestones ?? [])
+/* 三块副数据：拿到了就是 { ok: true, value }，没拿到是 { ok: false, error }。
+ *
+ * **失败时不要退回空数组。** 空数组是一句断言——「这个项目没有里程碑」，
+ * 而失败时的真相是「不知道」。把「不知道」画成「0 条」，比页面报错更糟：
+ * 报错用户知道要重试，假的 0 他会当真。 */
+const milestonesBlock = computed(() => data.value?.milestones ?? { ok: false })
+const contributionsBlock = computed(() => data.value?.contributions ?? { ok: false })
+const certificatesBlock = computed(() => data.value?.certificates ?? { ok: false })
+
+/** 只在真的拿到时才有值；别处一律先判 `.ok` 再用 */
+const milestones = computed(() => milestonesBlock.value.value ?? [])
 const newMilestonePath = computed(() => `/projects/${route.params.id}/milestones/new`)
 
 /**
@@ -62,9 +65,9 @@ const newMilestonePath = computed(() => `/projects/${route.params.id}/milestones
  * 横条、清单、明细表共用这一份顺序，三处才对得上。
  */
 const shares = computed(() =>
-  [...(data.value?.contributions?.members ?? [])].sort((a, b) => b.percentage - a.percentage)
+  [...(contributionsBlock.value.value?.members ?? [])].sort((a, b) => b.percentage - a.percentage)
 )
-const basedOn = computed(() => data.value?.contributions?.basedOnMilestones ?? 0)
+const basedOn = computed(() => contributionsBlock.value.value?.basedOnMilestones ?? 0)
 
 /* ——— 贡献证明 ———
  *
@@ -78,7 +81,7 @@ const basedOn = computed(() => data.value?.contributions?.basedOnMilestones ?? 0
 const me = computed(() => session.currentMemberId)
 
 const myCertificate = computed(() =>
-  (data.value?.certificates ?? []).find((c) => c.memberId === me.value)
+  (certificatesBlock.value.value ?? []).find((c) => c.memberId === me.value)
 )
 
 const isMember = computed(() => project.value?.members.includes(me.value) ?? false)
@@ -90,6 +93,9 @@ const isMember = computed(() => project.value?.members.includes(me.value) ?? fal
  *  （那四行是这个项目的客观状态，这一行是当前身份的待办），
  *  所以只在真有待办时出现，没有就不占一行。 */
 const tally = computed(() => {
+  // 读不到里程碑时返回 null——一排「0」是在陈述一件我们并不知道的事
+  if (!milestonesBlock.value.ok) return null
+
   const by = (status) => milestones.value.filter((m) => m.status === status).length
   const waitingOnMe = milestones.value.filter((m) => confirmGate(m, me.value).can).length
 
@@ -109,6 +115,11 @@ const myShare = computed(() => shares.value.find((m) => m.memberId === me.value)
 /** 不能签发的原因；空串表示能签发 */
 const issueBlockedReason = computed(() => {
   if (!isMember.value) return '你不是这个项目的成员，不能在这里签发贡献证明。'
+  // 比例或已有证书没读到时，「0%」和「还没签发过」都只是缺省值，不是事实。
+  // 照它们下判断，会把「不知道」说成「不够格」
+  if (!contributionsBlock.value.ok || !certificatesBlock.value.ok) {
+    return '这个项目的累计贡献比例暂时读不到，刷新页面再试。'
+  }
   if (basedOn.value === 0) {
     return '这个项目还没有任何一条里程碑通过全员确认。至少有一条之后，才能签发贡献证明。'
   }
@@ -199,11 +210,20 @@ async function issueCertificate() {
       <div class="columns">
         <BaseCard class="col">
           <template #title><h2>累计贡献比例</h2></template>
-          <ContributionPanel :members="shares" :based-on-milestones="basedOn" />
+
+          <!-- 这一块读不到时**不能**落到 ContributionPanel 的空状态：
+               那句「还没有可统计的贡献比例」是一句结论，而这里的真相是没读到 -->
+          <ErrorNotice
+            v-if="!contributionsBlock.ok"
+            :error="contributionsBlock.error"
+            title="这个项目的贡献比例暂时读不到"
+            @retry="run(route.params.id)"
+          />
+          <ContributionPanel v-else :members="shares" :based-on-milestones="basedOn" />
 
           <!-- <details> 是原生的折叠块：不用写任何 JavaScript，
                键盘和读屏都直接支持，展开状态还能被浏览器的页内查找唤起 -->
-          <details v-if="basedOn > 0" class="detail">
+          <details v-if="contributionsBlock.ok && milestonesBlock.ok && basedOn > 0" class="detail">
             <summary class="t-small">按里程碑查看</summary>
             <div class="table-wrap">
               <ContributionBreakdown :milestones="milestones" :members="shares" />
@@ -248,7 +268,14 @@ async function issueCertificate() {
         <BaseCard class="col side">
           <template #title><h2>存证概况</h2></template>
 
-          <ul class="tally">
+          <ErrorNotice
+            v-if="!tally"
+            :error="milestonesBlock.error"
+            title="里程碑暂时读不到"
+            @retry="run(route.params.id)"
+          />
+
+          <ul v-else class="tally">
             <li v-for="row in tally" :key="row.key" class="tally-row">
               <span class="tally-dot" :class="`tone--${row.tone}`" aria-hidden="true" />
               <span class="tally-label">{{ row.label }}</span>
@@ -262,11 +289,22 @@ async function issueCertificate() {
       <BaseCard padding="none" class="timeline-card">
         <template #title><h2>里程碑时间线</h2></template>
         <template #actions>
-          <span class="t-small t-soft t-nums">{{ milestones.length }} 条记录</span>
+          <!-- 读不到时不报条数。「0 条记录」和「暂时读不到」是两件事 -->
+          <span v-if="milestonesBlock.ok" class="t-small t-soft t-nums">
+            {{ milestones.length }} 条记录
+          </span>
         </template>
 
+        <ErrorNotice
+          v-if="!milestonesBlock.ok"
+          :error="milestonesBlock.error"
+          title="里程碑暂时读不到"
+          class="timeline-error"
+          @retry="run(route.params.id)"
+        />
+
         <EmptyState
-          v-if="milestones.length === 0"
+          v-else-if="milestones.length === 0"
           icon="chain"
           title="这个项目还没有里程碑"
           description="提交成果后会出现在这条时间线上。"
@@ -342,6 +380,10 @@ async function issueCertificate() {
 .issue p { max-width: 60ch; }
 
 .timeline { padding: 0 var(--sp-4) var(--sp-3); }
+
+/* 时间线那张卡是 padding="none"（为了让时间线自己贴边），
+   里面的错误提示得自己补回内边距，否则贴着卡片边框 */
+.timeline-error { padding: 0 var(--sp-4) var(--sp-4); }
 
 @media (max-width: 900px) {
   .columns { grid-template-columns: 1fr; }

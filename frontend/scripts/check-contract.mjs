@@ -3,6 +3,12 @@
  *
  *   npm run check:contract                      # 量假接口
  *   CONTRACT_BASE=http://localhost:3000/api npm run check:contract   # 量真接口
+ *   CONTRACT_STAGE=project CONTRACT_BASE=… npm run check:contract    # 只量 Project 那一批
+ *
+ * `CONTRACT_STAGE` 是为**逐接口联调**准备的。联调是一个接口一个接口切的，
+ * 切到第一批（Project 三个）时，里程碑与证书接口后端还没实现——这时候整张表跑下来
+ * 必然一片红，而那些红和这一批的验收没有关系，反而会把真正的问题淹掉。
+ * 给它一个阶段，它就只量这一阶段该有的东西，**这一批的验收结果才说得清**。
  *
  * —— 和 check:data 的分工 ——
  *
@@ -29,6 +35,39 @@ import * as mock from '../src/mock/handlers.js'
 
 const BASE = process.env.CONTRACT_BASE ?? ''
 const AS = process.env.CONTRACT_MEMBER ?? 'alice'
+
+/**
+ * 只量到哪一批为止。默认 `all`——本机跑假数据时每个接口都在，没有理由少量。
+ *
+ * 阶段的顺序就是 `docs/API.md` §8 的切换顺序，所以 `project` 覆盖的是
+ * 「已经切了第一批」时**应当**成立的全部断言，一条不少。
+ */
+const STAGE = process.env.CONTRACT_STAGE ?? 'all'
+
+/**
+ * 响应里多出来的字段怎么算。
+ *
+ * **默认仍然算问题**——理由在下面 validate 里：前端只渲染契约里写过的字段，
+ * 多出来的要么是契约漏写，要么是实现多给，两种都得有人拍板。
+ *
+ * 但联调期会出现一种正当的中间态：后端确实多返回了几个字段
+ * （2026-09-21 是 Project 上的 `docType` 与 `txId`），而**契约收不收它们正在协调中**。
+ * 这种时候，多出来的字段既不该被前端偷偷删掉，也不该把这一批接口的验收结果染红。
+ *
+ *   CONTRACT_EXTRA=note   多出来的字段单独列成 NOTE，不计入失败
+ *
+ * 只在契约正在协调时开，而且开了照样把每个多出来的字段原样列出来——
+ * **它不让问题消失，只把问题从「形状错了」改归到「契约待定」。**
+ */
+const EXTRA = process.env.CONTRACT_EXTRA ?? 'fail'
+const STAGES = ['project', 'milestone', 'certificate', 'all']
+if (!STAGES.includes(STAGE)) {
+  console.log(`CONTRACT_STAGE=${STAGE} 不认识。可用：${STAGES.join(', ')}`)
+  process.exit(1)
+}
+
+/** 这一阶段要不要量某一批 */
+const covers = (batch) => STAGE === 'all' || STAGES.indexOf(batch) <= STAGES.indexOf(STAGE)
 
 // ——————————————————————————————————————————————————————————
 // 判据：docs/API.md §6 的三个实体，外加 §4 的 Contributions
@@ -172,7 +211,11 @@ function validate(value, typeName, where, problems = []) {
   }
 
   for (const key of Object.keys(value)) {
-    if (!(key in shape)) problems.push(`${where} 多了字段 ${key}`)
+    if (key in shape) continue
+    // where 里带着下标（projects[3]），归并时去掉——同一个字段在十个项目上
+    // 多出来是一件事，不是十件
+    if (EXTRA === 'note') extras.add(`${where.split('[')[0]}.${key}`)
+    else problems.push(`${where} 多了字段 ${key}`)
   }
   return problems
 }
@@ -221,6 +264,9 @@ const CALLS = BASE
 const results = []
 let failed = 0
 
+/** CONTRACT_EXTRA=note 时，多出来的字段收在这里，最后单独列一段 */
+const extras = new Set()
+
 function report(label, problems, detail = '') {
   const ok = problems.length === 0
   if (!ok) failed++
@@ -247,6 +293,10 @@ async function main() {
     'GET /projects/:id 是 Project',
     validate(await CALLS.getProject(first.projectId), 'Project', first.projectId)
   )
+
+  if (!covers('milestone')) {
+    finish(`\n（CONTRACT_STAGE=${STAGE}，只量了 Project 这一批；里程碑与证书接口没有请求。）`)
+  }
 
   const milestones = await CALLS.listMilestones(first.projectId)
   report(
@@ -330,11 +380,22 @@ async function main() {
     })
   }
 
+  finish('')
+}
+
+/** 收尾：逐条打印结果、列出契约待定的多余字段、给总结，然后按成败退出 */
+function finish(tail) {
   for (const r of results) console.log(`${r.ok ? 'OK  ' : 'FAIL'}  ${r.label.padEnd(42)} ${r.detail}`)
+
+  if (extras.size) {
+    console.log('\n多出来的字段（CONTRACT_EXTRA=note，不计入失败，等契约定）：')
+    for (const key of [...extras].sort()) console.log(`NOTE  ${key}`)
+  }
+
   console.log(
     failed === 0
-      ? `\n${results.length} 个返回值，字段与类型都对得上 docs/API.md §6。`
-      : `\n${failed} 处形状对不上。`
+      ? `\n${results.length} 个返回值，字段与类型都对得上 docs/API.md §6。${tail}`
+      : `\n${failed} 处形状对不上。${tail}`
   )
   process.exit(failed === 0 ? 0 : 1)
 }

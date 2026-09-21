@@ -14,6 +14,7 @@ import { ensureProjects } from '../stores/projects.js'
 import { session } from '../stores/session.js'
 import { listMilestones } from './milestones.js'
 import { listCertificates } from './certificates.js'
+import { getProject, getContributions } from './projects.js'
 
 /**
  * 每个项目连同它自己的里程碑。项目列表页与概览页共用。
@@ -72,4 +73,55 @@ export async function overview() {
       .slice(0, 5)
       .map((m) => ({ ...m, projectName: nameOf.get(m.projectId) ?? m.projectId }))
   }
+}
+
+/**
+ * 项目详情页要的四块数据。
+ *
+ * **只有 `getProject` 决定这一页成不成。** 其余三块各自独立：任何一块失败，
+ * 都只让它自己那一块降级，不把一个真实存在的项目判成「打不开」。
+ *
+ * 这不是想象出来的容错。2026-09-21 首批联调当天撞的就是它：`listProjects` 与
+ * `getProject` 已经切到真后端，`getContributions` 还走假数据，而假数据只认识
+ * 内置的那三个项目 ID，对链上项目抛 `PROJECT_NOT_FOUND`。原来四个调用挂在同一个
+ * `Promise.all` 上，于是链上项目全都打不开——后端明明返回 200。
+ * 逐接口切换本来就意味着**中间态是混着跑的**，这一层必须扛得住。
+ *
+ * 失败的那块返回 `{ ok: false, error }` 而不是空数组：**空数组是一句断言**
+ * （「这个项目没有里程碑」），而当时的真相是「不知道」。页面据此显示
+ * 「暂时读不到」，不是「0 条」。
+ *
+ * @param {string} projectId
+ * @param {object} [deps] 只为自检注入替身用（scripts/check-degrade.mjs）。
+ *   生产代码一律走默认值——多一个参数换来的是这条退化路径在没有后端的机器上也能验。
+ * @returns {Promise<{
+ *   project: object,
+ *   milestones: { ok: boolean, value?: object[], error?: Error },
+ *   contributions: { ok: boolean, value?: object, error?: Error },
+ *   certificates: { ok: boolean, value?: object[], error?: Error }
+ * }>}
+ */
+export async function loadProjectDetail(projectId, deps = {}) {
+  const {
+    getProject: fetchProject = getProject,
+    listMilestones: fetchMilestones = listMilestones,
+    getContributions: fetchContributions = getContributions,
+    listCertificates: fetchCertificates = listCertificates
+  } = deps
+
+  /** 把一次调用变成「成了还是没成」，而不是让它掀桌 */
+  const settle = (promise) =>
+    promise.then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }))
+
+  // 四个调用仍然并发——串行要多等三个来回。区别只在于谁有权让整页失败：
+  // getProject 直接挂在 Promise.all 上（它 404，这一页就该是 404），
+  // 其余三个先被 settle 接住，永远不会 reject
+  const [project, milestones, contributions, certificates] = await Promise.all([
+    fetchProject(projectId),
+    settle(fetchMilestones(projectId)),
+    settle(fetchContributions(projectId)),
+    settle(fetchCertificates({ projectId }))
+  ])
+
+  return { project, milestones, contributions, certificates }
 }
