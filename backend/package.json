@@ -5,11 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/app.js",
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "test": "node --test",
+    "smoke:projects": "node scripts/smoke-project-api.mjs"
   },
   "dependencies": {
-    "cors": "latest",
-    "express": "latest",
-    "multer": "latest"
+    "@grpc/grpc-js": "^1.14.0",
+    "@hyperledger/fabric-gateway": "^1.10.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
   }
 }
+

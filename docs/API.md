@@ -30,7 +30,8 @@ X-Member-Id: alice
   "ownerId": "alice",
   "members": ["alice", "bob", "charlie"],
   "createdAt": "2026-09-11T10:00:00.000Z",
-  "status": "ACTIVE"
+  "status": "ACTIVE",
+  "txId": "46a1aa73018e30521f1a6ebb6698e4bf671c3a8b2425b6399de2047e0fd389c8"
 }
 ```
 
@@ -64,12 +65,15 @@ X-Member-Id: alice
     "ownerId": "alice",
     "members": ["alice", "bob", "charlie"],
     "createdAt": "2026-09-11T10:00:00.000Z",
-    "status": "ACTIVE"
+    "status": "ACTIVE",
+    "txId": "46a1aa73018e30521f1a6ebb6698e4bf671c3a8b2425b6399de2047e0fd389c8"
   }
 ]
 ```
 
 MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种情况视为降级模式。
+
+Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六进制）；旧数据或纯演示数据可以没有此字段。链码内部的 `docType` 不属于 REST 响应，不得返回给前端。
 
 ### POST `/projects`
 
@@ -268,6 +272,7 @@ MVP 中若 Header 缺失，可以返回全部演示项目；前端会把这种�
 - `members: string[]`
 - `createdAt: ISO 8601 string`
 - `status: ACTIVE`
+- `txId: string`（可选；存在时为创建项目的 Fabric 交易 ID，64 位小写十六进制）
 
 ### Milestone
 - `milestoneId: string`
