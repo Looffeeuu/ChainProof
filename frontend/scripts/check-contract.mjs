@@ -51,7 +51,7 @@ const STAGE = process.env.CONTRACT_STAGE ?? 'all'
  * 多出来的要么是契约漏写，要么是实现多给，两种都得有人拍板。
  *
  * 但联调期会出现一种正当的中间态：后端确实多返回了几个字段
- * （2026-09-21 是 Project 上的 `docType` 与 `txId`），而**契约收不收它们正在协调中**。
+ * 而**契约收不收它们正在协调中**。
  * 这种时候，多出来的字段既不该被前端偷偷删掉，也不该把这一批接口的验收结果染红。
  *
  *   CONTRACT_EXTRA=note   多出来的字段单独列成 NOTE，不计入失败
@@ -123,7 +123,8 @@ const SCHEMA = {
     ownerId: R.str,
     members: R.strArray,
     createdAt: R.iso,
-    status: R.projectStatus
+    status: R.projectStatus,
+    txId: opt(R.hex64) // 旧数据/纯演示数据可无；真实 Project 有值时必须是 Fabric 交易 ID
   },
   Milestone: {
     milestoneId: R.str,
