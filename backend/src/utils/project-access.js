@@ -10,3 +10,18 @@ export function visibleProjects(projects, memberId) {
   )
 }
 
+
+// The REST contract exposes business fields, not Fabric's internal docType.
+export function publicProject(project) {
+  const { projectId, name, description, ownerId, members, createdAt, status, txId } = project
+  return {
+    projectId,
+    name,
+    description,
+    ownerId,
+    members,
+    createdAt,
+    status,
+    ...(txId === undefined ? {} : { txId })
+  }
+}
