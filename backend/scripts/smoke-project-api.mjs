@@ -56,18 +56,24 @@ async function main() {
     'X-Member-Id takes precedence over body.ownerId', created.value)
   requireResult(/^[0-9a-f]{64}$/i.test(created.value.txId ?? ''),
     'created Project includes a Fabric transaction ID', created.value)
+  requireResult(!Object.hasOwn(created.value, 'docType'),
+    'POST /projects omits internal docType', created.value)
 
   const fetched = await request(`projects/${projectId}`, { memberId: 'alice' })
   requireResult(fetched.status === 200 &&
     fetched.value?.projectId === projectId &&
     fetched.value?.txId === created.value.txId,
   'GET /projects/:id reads the same Project from Fabric', fetched)
+  requireResult(!Object.hasOwn(fetched.value, 'docType'),
+    'GET /projects/:id omits internal docType', fetched.value)
 
   const aliceList = await request('projects', { memberId: 'alice' })
   requireResult(aliceList.status === 200 &&
     Array.isArray(aliceList.value) &&
     aliceList.value.some((project) => project.projectId === projectId),
   'alice can list her Project', aliceList)
+  requireResult(aliceList.value.every((project) => !Object.hasOwn(project, 'docType')),
+    'GET /projects omits internal docType', aliceList.value)
 
   const outsiderList = await request('projects', { memberId: 'outsider' })
   requireResult(outsiderList.status === 200 &&
