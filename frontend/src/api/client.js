@@ -13,6 +13,16 @@ import { session } from '../stores/session.js'
 
 const BASE = '/api'
 
+/**
+ * 「后端连不上」这句话只写一处。
+ *
+ * 它有**两条**触发路径，用户看到的必须是同一句：
+ *   1. `fetch` 在网络层就 reject（直连后端、断网、服务没起来）；
+ *   2. 开发代理转发失败，回一个 502（见下面 request 里的说明）。
+ * 分成两句写，同一个故障在两种跑法下会说不一样的话。
+ */
+const OFFLINE = '连不上服务器，请确认后端已经启动。'
+
 /** 抛给上层的错误。带 code 供分支判断，message 原样显示给用户（spec/02 §2.6） */
 export class ApiError extends Error {
   constructor(message, code, status) {
@@ -37,7 +47,7 @@ async function request(path, options = {}) {
   } catch {
     // fetch 只有在网络层失败时才 reject（断网、跨域、服务没起来）。
     // 这类错误没有 message 可显示，这里给一句人话，否则用户看到的是 "Failed to fetch"。
-    throw new ApiError('连不上服务器，请确认后端已经启动。', 'NETWORK_ERROR', 0)
+    throw new ApiError(OFFLINE, 'NETWORK_ERROR', 0)
   }
 
   // 204 没有响应体，提前返回，否则 res.json() 会抛解析错误
@@ -52,6 +62,29 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const err = payload?.error ?? {}
+
+    /**
+     * **开发代理转发失败，也是「连不上后端」。**
+     *
+     * 前端发的是同源的 `/api/...`，由 Vite 的代理转给后端（vite.config.js）。
+     * 后端没起来时，`fetch` 本身是**成功**的——它拿到了代理给的一个响应，
+     * 只不过那个响应是 `502 Bad Gateway`、`Content-Type: text/plain`、**空响应体**
+     * （2026-09-22 实测）。于是它落进下面的通用分支，用户看到的是
+     * 「请求失败（HTTP 502）」加一个 `HTTP_ERROR`——那是一句没法照着做任何事的话，
+     * 而实际情况和上面 catch 里那条是同一件事：后端没开。
+     *
+     * 判据要卡得窄，**只认「502 且没有结构化 error」**：
+     * 代理自己造的响应一定没有 `{ error: { code, message } }`，
+     * 而后端真要返回 502（比如它自己也在代理别的服务），按契约会带上那个结构，
+     * 那时就该原样显示它的 message，不能被这一条吞掉。
+     *
+     * status 保留真实的 502 而不是抹成 0：HTTP 这一层确实发生了，
+     * 排查时看到 502 才对得上浏览器网络面板。
+     */
+    if (res.status === 502 && !payload?.error) {
+      throw new ApiError(OFFLINE, 'NETWORK_ERROR', 502)
+    }
+
     throw new ApiError(
       err.message ?? `请求失败（HTTP ${res.status}）。`,
       err.code ?? 'HTTP_ERROR',

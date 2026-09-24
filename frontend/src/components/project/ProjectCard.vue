@@ -15,23 +15,33 @@ import { formatDate } from '../../utils/format-time.js'
  */
 const props = defineProps({
   project: { type: Object, required: true },
+  /**
+   * 这个项目的里程碑。**`null` 表示「不可知」，不是「一条都没有」**：
+   * 项目已经从链上取到、而里程碑接口还没切到真后端时就是这种情况
+   * （`api/queries.js` 的 projectsWithMilestones）。
+   * 这时候画一条 0 的进度条、写一句「尚无里程碑」，是在替一件不知道的事作证。
+   */
   milestones: { type: Array, default: () => [] }
 })
 
-const verified = computed(() => props.milestones.filter((m) => m.status === 'VERIFIED').length)
+const unknown = computed(() => props.milestones === null)
+const rows = computed(() => props.milestones ?? [])
+
+const verified = computed(() => rows.value.filter((m) => m.status === 'VERIFIED').length)
 const pending = computed(
-  () => props.milestones.filter((m) => m.status === 'PENDING_CONFIRMATION').length
+  () => rows.value.filter((m) => m.status === 'PENDING_CONFIRMATION').length
 )
-const rejected = computed(() => props.milestones.filter((m) => m.status === 'REJECTED').length)
+const rejected = computed(() => rows.value.filter((m) => m.status === 'REJECTED').length)
 
 /**
  * 一句话的进度摘要。三种情况各有各的说法，
  * 都比「3 个里程碑」这种纯计数更能说明这个项目现在处于什么阶段。
  */
 const summary = computed(() => {
-  if (props.milestones.length === 0) return { text: '尚无里程碑', tone: 'rest' }
+  if (unknown.value) return { text: '里程碑未接入', tone: 'rest' }
+  if (rows.value.length === 0) return { text: '尚无里程碑', tone: 'rest' }
   if (pending.value > 0) return { text: `${pending.value} 条待确认`, tone: 'pending' }
-  if (verified.value === props.milestones.length) return { text: '全部已验证', tone: 'verified' }
+  if (verified.value === rows.value.length) return { text: '全部已验证', tone: 'verified' }
   return { text: '有被拒绝的里程碑', tone: 'rejected' }
 })
 
@@ -58,11 +68,14 @@ const segments = computed(() =>
       {{ project.description || '这个项目还没有填写描述。' }}
     </p>
 
-    <div class="progress">
+    <!-- 不可知时不画进度条：一条空槽看起来和「一条都没有」一模一样 -->
+    <p v-if="unknown" class="t-small t-soft count">里程碑还没接通。</p>
+
+    <div v-else class="progress">
       <div
         class="bar"
         role="img"
-        :aria-label="`共 ${milestones.length} 条里程碑，已验证 ${verified} 条`"
+        :aria-label="`共 ${rows.length} 条里程碑，已验证 ${verified} 条`"
       >
         <!-- 一条都没有时画一条空槽，而不是什么都不画：
              空槽说明「这里本来会有进度」，什么都没有只会像是漏渲染了 -->
@@ -75,7 +88,7 @@ const segments = computed(() =>
         />
       </div>
       <p class="t-small t-soft t-nums count">
-        {{ verified }} / {{ milestones.length }} 条已验证
+        {{ verified }} / {{ rows.length }} 条已验证
       </p>
     </div>
 
