@@ -73,6 +73,22 @@ VITE_DEMO_MEMBERS=alice,bob,charlie,empty-test-20260921
 CONTRACT_BASE=http://localhost:3000/api npm run check:contract
 ```
 
+### 第二批：Milestone、确认与贡献统计
+
+在首批配置基础上，把 `.env.local` 的接口清单改为：
+
+```ini
+VITE_REAL_APIS=listProjects,createProject,getProject,listMilestones,createMilestone,getMilestone,confirmMilestone,getContributions
+```
+
+前端现有提交页会发送原始文件、浏览器计算的 `clientFileHash` 和贡献声明；确认页按当前 `X-Member-Id` 提交确认或拒绝。后端与 Fabric 就绪后，依次验证上传成功、故意篡改哈希、多人确认、拒绝关闭、重复表态和项目贡献统计。
+
+逐字段检查可限制在第二阶段：
+
+```bash
+CONTRACT_STAGE=milestone CONTRACT_BASE=http://localhost:3000/api npm run check:contract
+```
+
 ## 目录
 
 ```

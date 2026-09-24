@@ -134,6 +134,10 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 
 返回完整 `Milestone`。
 
+### GET `/milestones/:milestoneId/file`
+
+返回链下托管的原始文件，`Content-Disposition` 使用链上 `fileName`。链上存在里程碑但本地文件缺失时返回 HTTP 404 + `FILE_NOT_FOUND`。
+
 ### POST `/milestones/:milestoneId/confirmations`
 
 当前成员由 `X-Member-Id` 决定。
@@ -348,4 +352,3 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 9. Certificate / verify 系列
 
 BC 每完成一个接口就通知 A，不需要等待整套后端全部完成。
-

@@ -1,11 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { evaluateTransaction, submitTransaction } from '../services/fabric.service.js'
 import { publicProject, visibleProjects } from '../utils/project-access.js'
-
-function currentMemberId(req) {
-  const headerValue = req.get('X-Member-Id')
-  return typeof headerValue === 'string' && headerValue.trim() ? headerValue.trim() : null
-}
+import { currentMemberId } from '../utils/request-member.js'
 
 export async function listProjects(req, res, next) {
   try {
@@ -60,4 +56,3 @@ export async function getProject(req, res, next) {
     next(error)
   }
 }
-
