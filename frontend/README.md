@@ -89,6 +89,25 @@ VITE_REAL_APIS=listProjects,createProject,getProject,listMilestones,createMilest
 CONTRACT_STAGE=milestone CONTRACT_BASE=http://localhost:3000/api npm run check:contract
 ```
 
+### 第三批：贡献证明与公开验证
+
+第三批接口全部接通后，把 `.env.local` 改为：
+
+```ini
+VITE_REAL_APIS=*
+```
+
+在项目详情页检查时间线状态、链上交易 ID 和 Contribution Dashboard；为 0% 成员签发时应显示后端的 `NO_VERIFIED_CONTRIBUTION` 提示。为有贡献成员签发后，证书页应显示成员、最终整数比例、里程碑、签发时间与交易 ID；复制公开验证链接，在未登录窗口中也应得到 `VALID`。不存在的证书编号应显示查无记录，而不是接口错误。
+
+证书页的本地文件核验只在浏览器计算 SHA-256，不会上传文件。选中某条已验证里程碑的原文件应显示一致，选中不同文件应显示不一致。
+
+真实 Fabric、后端启动后，先运行后端第三周闭环脚本，再启动前端验收：
+
+```bash
+cd backend
+npm run smoke:week3
+```
+
 ## 目录
 
 ```

@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { env } from './config/env.js'
 import { projectRouter } from './routes/project.routes.js'
 import { milestoneRouter } from './routes/milestone.routes.js'
+import { certificateRouter, verificationRouter } from './routes/certificate.routes.js'
 import { mapApplicationError } from './utils/application-error.js'
 
 export const app = express()
@@ -22,6 +23,8 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/projects', projectRouter)
 app.use('/api/milestones', milestoneRouter)
+app.use('/api/certificates', certificateRouter)
+app.use('/api/verify', verificationRouter)
 
 app.use((req, res) => {
   res.status(404).json({

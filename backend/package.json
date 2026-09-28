@@ -8,7 +8,8 @@
     "start": "node src/app.js",
     "test": "node --test",
     "smoke:projects": "node scripts/smoke-project-api.mjs",
-    "smoke:milestones": "node scripts/smoke-milestone-api.mjs"
+    "smoke:milestones": "node scripts/smoke-milestone-api.mjs",
+    "smoke:week3": "node scripts/smoke-week3-api.mjs"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.0",

@@ -188,3 +188,24 @@ npm run smoke:projects
 - [ ] A 线能把 Project 页面从 mock 切换到真实接口
 
 真实 Fabric 联调与 A 线首批 Project API 联调通过后，将 PR #8 从 Draft 转为 Ready；审阅并合并后由 `Closes #3` 自动关闭 Issue #3。
+
+## 13. Week 3 证书与公开验证
+
+第三周新增以下真实接口：
+
+- `GET /api/projects/:projectId/history`
+- `GET /api/certificates?projectId=&memberId=`
+- `POST /api/projects/:projectId/certificates`
+- `GET /api/certificates/:certificateId`
+- `GET /api/verify/:certificateId`
+
+签发资格、最终整数贡献比例、`milestoneIds` 快照和幂等顺序均由 Chaincode 判定。后端只生成候选证书 ID、提交交易并按 REST 契约过滤内部字段。公开验证查不到证书时仍返回 HTTP 200 和 `verificationStatus: NOT_FOUND`。
+
+真实 Fabric 和后端启动后运行完整第三周闭环：
+
+```bash
+cd backend
+npm run smoke:week3
+```
+
+脚本会在本地账本创建两个唯一项目和两条已验证里程碑，并验证：无已验证里程碑与最终 0% 的统一 409 错误、50%/50% 整数贡献结果、`milestoneIds` 只含实际正贡献记录、重复签发幂等、证书列表筛选、单证读取、公开 `VALID` / `NOT_FOUND`，以及项目历史包含创建交易。测试数据会保留在本地账本中。

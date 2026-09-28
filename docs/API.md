@@ -103,7 +103,29 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 
 ### GET `/projects/:projectId/history`
 
-返回该项目链上历史记录。该接口不阻塞第一阶段前端联调。
+返回该项目链上历史记录，按 Fabric 返回顺序排列：
+
+```json
+[
+  {
+    "txId": "46a1aa73018e30521f1a6ebb6698e4bf671c3a8b2425b6399de2047e0fd389c8",
+    "timestamp": "2026-09-11T10:00:00.000Z",
+    "isDelete": false,
+    "value": {
+      "projectId": "P001",
+      "name": "ChainProof Demo",
+      "description": "课程演示项目",
+      "ownerId": "alice",
+      "members": ["alice", "bob", "charlie"],
+      "createdAt": "2026-09-11T10:00:00.000Z",
+      "status": "ACTIVE",
+      "txId": "46a1aa73018e30521f1a6ebb6698e4bf671c3a8b2425b6399de2047e0fd389c8"
+    }
+  }
+]
+```
+
+`value` 不返回链码内部的 `docType`；删除记录的 `value` 可以为 `null`。
 
 ---
 
