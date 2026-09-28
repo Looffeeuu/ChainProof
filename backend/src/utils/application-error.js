@@ -11,7 +11,32 @@ const CHAINCODE_ERROR_STATUS = Object.freeze({
   VALIDATION_ERROR: 400
 })
 
+export class ApplicationError extends Error {
+  constructor(status, code, message) {
+    super(message)
+    this.name = 'ApplicationError'
+    this.status = status
+    this.code = code
+  }
+}
+
 export function mapApplicationError(error) {
+  if (
+    error instanceof ApplicationError &&
+    Number.isInteger(error.status) &&
+    typeof error.code === 'string'
+  ) {
+    return { status: error.status, code: error.code, message: error.message }
+  }
+
+  if (error?.code === 'LIMIT_FILE_SIZE') {
+    return {
+      status: 413,
+      code: 'FILE_TOO_LARGE',
+      message: '上传文件超过 50 MiB 上限。'
+    }
+  }
+
   const message = error instanceof Error ? error.message : String(error ?? '')
   const structured = (Array.isArray(error?.details) ? error.details : []).map((detail) => parseChaincodeError(String(detail?.message ?? ""))).find(Boolean) ?? parseChaincodeError(message)
   if (structured) return structured

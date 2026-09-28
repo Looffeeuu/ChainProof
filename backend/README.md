@@ -141,6 +141,23 @@ curl http://localhost:3000/api/projects
 
 原始文件保存在链下，Fabric 只存服务端计算出的 SHA-256。
 
+实现细节：
+
+- 默认保存到 `backend/uploads/`，可用 `UPLOAD_DIR` 改到独立数据盘。
+- 文件以 `milestoneId` 的 SHA-256 作为本地文件名，避免路径穿越和同名覆盖。
+- Fabric 提交失败时会清理本次链下文件；链上提交成功后保留原始字节。
+- `GET /api/milestones/:milestoneId/file` 按链上记录的原文件名下载。
+- 单文件上限 50 MiB；超过时返回 `413 FILE_TOO_LARGE`。
+
+真实 Fabric 和后端启动后运行 Week 2 闭环验收：
+
+```bash
+cd backend
+npm run smoke:milestones
+```
+
+脚本会验证双哈希一致与故意不一致、链下文件下载、列表/详情、两名 contributor 依次确认、`VERIFIED`、拒绝立即 `REJECTED`、重复与关闭后表态错误，以及 Contribution Dashboard 的 `basedOnMilestones`。
+
 ## 11. 真实 Project API 冒烟验证
 
 前提：按 `blockchain/network/README.md` 在 Linux/WSL2 的 Docker 环境部署 `chainproof` 链码；在本机 `backend/.env` 配好 Fabric TLS、用户证书和私钥的**绝对路径**，并启动后端。不要提交 `.env`、证书或私钥。

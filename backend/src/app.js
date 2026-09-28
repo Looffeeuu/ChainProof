@@ -1,10 +1,13 @@
 import express from 'express'
 import cors from 'cors'
+import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 import { env } from './config/env.js'
 import { projectRouter } from './routes/project.routes.js'
+import { milestoneRouter } from './routes/milestone.routes.js'
 import { mapApplicationError } from './utils/application-error.js'
 
-const app = express()
+export const app = express()
 
 app.use(cors({ origin: env.corsOrigin }))
 app.use(express.json())
@@ -18,6 +21,7 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api/projects', projectRouter)
+app.use('/api/milestones', milestoneRouter)
 
 app.use((req, res) => {
   res.status(404).json({
@@ -39,7 +43,9 @@ app.use((err, _req, res, _next) => {
   })
 })
 
-app.listen(env.port, () => {
-  console.log(`ChainProof backend listening on http://localhost:${env.port}`)
-})
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  app.listen(env.port, () => {
+    console.log(`ChainProof backend listening on http://localhost:${env.port}`)
+  })
+}
 
