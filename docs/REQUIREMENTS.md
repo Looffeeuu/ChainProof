@@ -42,6 +42,8 @@ MVP 的目标是在一次简短的课堂演示中，完整展示“创建项目 
 - description
 - fileName
 - fileHash：64 位小写十六进制 SHA-256
+- submitterId：提交该里程碑的项目成员
+- requiredConfirmerIds[]：创建时除提交者外的项目成员快照
 - contributors[]
 - confirmations[]
 - createdAt
@@ -91,13 +93,15 @@ MVP 采用“链下托管 + 前后端双算 SHA-256”的方案：
 ### FR-04 贡献比例声明
 里程碑提交者需要为参与成员分配整数贡献比例，总和必须等于 100%。
 
-### FR-05 成员确认
-相关 contributor 可以确认或拒绝贡献声明。成员一旦表态，MVP 中不得撤回或改票。
+### FR-05 独立成员确认
+创建里程碑时，请求头 `X-Member-Id` 记录为 `submitterId`。提交者必须属于项目，且项目至少有 2 名不同成员。
+
+系统在创建时保存 `requiredConfirmerIds`：项目全部成员中除提交者以外的人，按 UTF-8 无符号字节序升序排列。提交者不能确认或拒绝自己的里程碑；只有快照中的成员可以表态。确认资格与 contributors 分配无关。成员一旦表态，MVP 中不得撤回或改票。
 
 ### FR-06 验证状态
 - 初始状态：`PENDING_CONFIRMATION`
-- 所有列出的 contributor 均确认后：`VERIFIED`
-- 任意 contributor 拒绝后：立即变为 `REJECTED`
+- 所有 `requiredConfirmerIds` 成员均确认后：`VERIFIED`
+- 任意 required confirmer 拒绝后：立即变为 `REJECTED`
 - `VERIFIED` / `REJECTED` 视为关闭状态，不再接受新的表态
 
 ### FR-07 项目时间线
@@ -150,8 +154,8 @@ MVP 采用“链下托管 + 前后端双算 SHA-256”的方案：
 2. 提交一个里程碑并上传文件。
 3. 展示浏览器本地 SHA-256，并由后端独立复算通过。
 4. 为成员分配贡献比例。
-5. 不同成员分别完成贡献确认。
-6. 展示该里程碑状态变为 `VERIFIED`，并能看到对应链上交易 ID。
+5. 切换到非提交者成员，分别完成独立确认；同时演示提交者没有确认入口。
+6. 展示全部 required confirmer 完成后，里程碑状态变为 `VERIFIED`，并能看到对应链上交易 ID。
 7. 查看项目 Timeline 和 Contribution Dashboard。
 8. 为成员生成贡献证明。
 9. 打开公开验证页面并得到 `VALID`；对不存在的 ID 得到 `NOT_FOUND`。

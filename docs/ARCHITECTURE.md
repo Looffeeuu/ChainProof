@@ -156,16 +156,22 @@ MVP 采用前后端双算：
 
 MVP 固定规则：
 - contributor 比例均为整数，总和必须严格等于 100。
+- 创建请求的 `X-Member-Id` 保存为 `submitterId`；提交者必须属于项目。
+- 项目至少需要 2 名不同成员。
+- 创建时把项目全部非提交者成员按 UTF-8 无符号字节序排序，保存为 `requiredConfirmerIds` 快照。项目成员后续变化不回写既有里程碑的确认范围。
+- 提交者不能确认或拒绝自己的里程碑。
+- 确认资格由 `requiredConfirmerIds` 决定，与 contributors 分配无关；因此贡献为 0 或未列入 contributors 的项目成员仍可以是独立确认人。
 - 初始：`PENDING_CONFIRMATION`
-- 所有 contributor 都确认：`VERIFIED`
-- 任意 contributor 拒绝：立即 `REJECTED`
+- 所有 required confirmer 都确认：`VERIFIED`
+- 任意 required confirmer 拒绝：立即 `REJECTED`
 - `VERIFIED` 和 `REJECTED` 都是关闭状态，不再接受新表态。
 - 同一成员只能表态一次，不允许撤回或改票。
 
 因此 Chaincode / 后端需要区分：
+- `SUBMITTER_CANNOT_CONFIRM`
+- `MEMBER_NOT_REVIEWER`
 - `ALREADY_DECIDED`
 - `MILESTONE_CLOSED`
-- `MEMBER_NOT_IN_CLAIM`
 
 ## 8. 贡献统计规则
 
