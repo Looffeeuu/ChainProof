@@ -3,7 +3,7 @@ import test from 'node:test'
 import { once } from 'node:events'
 import { app } from '../src/app.js'
 
-test('Week 2 路由已注册且确认接口要求 X-Member-Id', async (t) => {
+test('Week 2/3 路由已注册且在访问 Fabric 前完成必填校验', async (t) => {
   const server = app.listen(0)
   t.after(() => server.close())
   await once(server, 'listening')
@@ -36,4 +36,17 @@ test('Week 2 路由已注册且确认接口要求 X-Member-Id', async (t) => {
   })
   assert.equal(upload.status, 400)
   assert.equal((await upload.json()).error.code, 'VALIDATION_ERROR')
+
+  const certificate = await fetch(`${base}/api/projects/P001/certificates`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  })
+  assert.equal(certificate.status, 400)
+  assert.deepEqual(await certificate.json(), {
+    error: {
+      code: 'VALIDATION_ERROR',
+      message: 'memberId 为必填项。'
+    }
+  })
 })

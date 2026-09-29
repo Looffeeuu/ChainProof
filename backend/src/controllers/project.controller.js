@@ -56,3 +56,19 @@ export async function getProject(req, res, next) {
     next(error)
   }
 }
+
+export async function getProjectHistory(req, res, next) {
+  try {
+    const history = await evaluateTransaction('GetProjectHistory', req.params.projectId)
+    res.json(history.map((entry) => ({
+      txId: entry.txId,
+      timestamp: entry.timestamp,
+      isDelete: entry.isDelete,
+      value: entry.value && typeof entry.value === 'object'
+        ? publicProject(entry.value)
+        : entry.value
+    })))
+  } catch (error) {
+    next(error)
+  }
+}
