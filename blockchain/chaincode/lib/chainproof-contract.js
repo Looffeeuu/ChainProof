@@ -195,7 +195,7 @@ class ChainProofContract extends Contract {
    * @param {string} contributorsJson {memberId, percentage}[] 的 JSON，整数百分比且总和严格为 100
    * @returns {Promise<string>} 完整 Milestone JSON
    */
-  async CreateMilestone (ctx, milestoneId, projectId, title, description, fileName, fileHash, contributorsJson) {
+  async CreateMilestone (ctx, milestoneId, projectId, title, description, fileName, fileHash, contributorsJson, submitterId) {
     this._requireNonEmptyString(milestoneId, 'milestoneId')
     this._requireNonEmptyString(projectId, 'projectId')
     this._requireNonEmptyString(title, 'title')
@@ -206,6 +206,25 @@ class ChainProofContract extends Contract {
 
     // 项目不存在优先于其它校验，保证后端拿到 404 而不是 400
     const project = await this._readProject(ctx, projectId)
+
+    this._requireNonEmptyString(submitterId, 'submitterId')
+    if (!project.members.includes(submitterId)) {
+      throw new ChainProofError(
+        'VALIDATION_ERROR',
+        `提交者 ${submitterId} 不属于项目 ${projectId} 的成员。`
+      )
+    }
+    if (project.members.length < 2) {
+      throw new ChainProofError(
+        'VALIDATION_ERROR',
+        '项目至少需要两名成员，才能由提交者以外的成员独立确认贡献。'
+      )
+    }
+
+    // 创建时保存确认人快照。成员列表后续即使变化，也不改变既有里程碑的确认范围。
+    const requiredConfirmerIds = project.members
+      .filter((memberId) => memberId !== submitterId)
+      .sort((a, b) => this._compareUtf8ByteOrder(a, b))
 
     if (typeof fileHash !== 'string' || !SHA256_HEX.test(fileHash)) {
       throw new ChainProofError(
@@ -234,6 +253,8 @@ class ChainProofContract extends Contract {
       description: description || '',
       fileName: fileName || '',
       fileHash,
+      submitterId,
+      requiredConfirmerIds,
       contributors,
       confirmations: [],
       createdAt: this._txTimestamp(ctx),
@@ -312,16 +333,26 @@ class ChainProofContract extends Contract {
       )
     }
 
-    // 2) 必须是该里程碑的贡献者
-    const contributorIds = milestone.contributors.map((item) => item.memberId)
-    if (!contributorIds.includes(memberId)) {
+    // 2) 提交者不能确认或拒绝自己的提交
+    if (memberId === milestone.submitterId) {
       throw new ChainProofError(
-        'MEMBER_NOT_IN_CLAIM',
-        `成员 ${memberId} 不在里程碑 ${milestoneId} 的贡献者名单中。`
+        'SUBMITTER_CANNOT_CONFIRM',
+        `提交者 ${memberId} 不能确认或拒绝自己提交的里程碑。`
       )
     }
 
-    // 3) 同一成员只能表态一次
+    // 3) 确认资格来自创建时保存的项目成员快照，与 contributors 分配无关
+    const requiredConfirmerIds = Array.isArray(milestone.requiredConfirmerIds)
+      ? milestone.requiredConfirmerIds
+      : []
+    if (!requiredConfirmerIds.includes(memberId)) {
+      throw new ChainProofError(
+        'MEMBER_NOT_REVIEWER',
+        `成员 ${memberId} 不是里程碑 ${milestoneId} 的确认人。`
+      )
+    }
+
+    // 4) 同一成员只能表态一次
     const alreadyDecided = milestone.confirmations.some((item) => item.memberId === memberId)
     if (alreadyDecided) {
       throw new ChainProofError(
@@ -337,8 +368,8 @@ class ChainProofContract extends Contract {
     })
 
     const decisions = new Map(milestone.confirmations.map((item) => [item.memberId, item.decision]))
-    const hasRejection = contributorIds.some((id) => decisions.get(id) === 'REJECTED')
-    const allConfirmed = contributorIds.every((id) => decisions.get(id) === 'CONFIRMED')
+    const hasRejection = requiredConfirmerIds.some((id) => decisions.get(id) === 'REJECTED')
+    const allConfirmed = requiredConfirmerIds.every((id) => decisions.get(id) === 'CONFIRMED')
 
     if (hasRejection) {
       milestone.status = MILESTONE_STATUS.REJECTED
