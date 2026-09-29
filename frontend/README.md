@@ -97,7 +97,7 @@ CONTRACT_STAGE=milestone CONTRACT_BASE=http://localhost:3000/api npm run check:c
 VITE_REAL_APIS=*
 ```
 
-在项目详情页检查时间线状态、链上交易 ID 和 Contribution Dashboard；为 0% 成员签发时应显示后端的 `NO_VERIFIED_CONTRIBUTION` 提示。为有贡献成员签发后，证书页应显示成员、最终整数比例、里程碑、签发时间与交易 ID；复制公开验证链接，在未登录窗口中也应得到 `VALID`。不存在的证书编号应显示查无记录，而不是接口错误。
+在项目详情页检查时间线状态、链上交易 ID 和 Contribution Dashboard；0% 成员的签发按钮应禁用，并显示「累计贡献比例为 0%，不能签发证书。」。后端对应的 409 `NO_VERIFIED_CONTRIBUTION` 分支由 `smoke:week3` 覆盖。为有贡献成员签发后，证书页应显示成员、最终整数比例、里程碑、签发时间与交易 ID；复制公开验证链接，在未登录窗口中也应得到 `VALID`。不存在的证书编号应显示查无记录，而不是接口错误。
 
 证书页的本地文件核验只在浏览器计算 SHA-256，不会上传文件。选中某条已验证里程碑的原文件应显示一致，选中不同文件应显示不一致。
 
@@ -106,6 +106,13 @@ VITE_REAL_APIS=*
 ```bash
 cd backend
 npm run smoke:week3
+```
+
+再运行完整契约逐字段核对：
+
+```bash
+cd frontend
+CONTRACT_BASE=http://localhost:3000/api npm run check:contract
 ```
 
 ## 目录
@@ -124,3 +131,4 @@ src/
 
 改动前先看 `src/styles/tokens.css` 与 `src/api/`：前者是样式的唯一来源，
 后者是与后端的唯一接触面。
+
