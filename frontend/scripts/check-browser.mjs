@@ -9,7 +9,7 @@
  *
  * spec/01 §3.2 的第 7 条——「缩到 375px 宽不出现横向滚动」——原先写着
  * 「只能目视，浏览器里拖窗口」。目视的问题不是做不到，是**没人会每次都做**：
- * 十个页面 × 两个宽度 = 二十次拖拽，改完一个组件谁也不会重走一遍。
+ * 十个页面 × 三个宽度 = 三十次拖拽，改完一个组件谁也不会重走一遍。
  * 溢出时把**具体是哪个元素**撑出去的一并报出来——只说「这一页横向溢出了」，
  * 排查还得从头来。
  *
@@ -54,7 +54,10 @@ const PAGES = [
 ]
 
 /** 375 是最窄的常见手机；900 是侧栏收成顶栏的断点，边界最容易出事 */
-const WIDTHS = [375, 900]
+// 1280 是最常见的笔记本宽度，也是答辩投屏常用的分辨率。
+// 只量 375 与 900 时，贡献确认页在 1280 下的横向滚动条漏过去了：
+// 隐藏的核对用 file input 被全局的文件框样式撑成 100% 宽 + 内边距，越出了卡片
+const WIDTHS = [375, 900, 1280]
 
 /**
  * 在页面里跑的那段。返回是否溢出，以及溢出时最靠右的那几个元素。
@@ -118,8 +121,15 @@ async function main() {
 
       for (const [label, path] of PAGES) {
         await page.go(path)
-        // 数据来自假接口，有几十毫秒延时；等它把内容画完再量
-        await sleep(700)
+        // 等取数结束再量。原来是固定睡 700ms，而假接口每次调用有 200–600ms 随机延时，
+        // 贡献确认页又是先取里程碑、再取项目，前后两次串行——经常还在「加载中」那一帧就量完了，
+        // 真正的内容从没被量到（1280 下的横向滚动条就是这么漏掉的）。
+        // 信号与 check:flows 的 $settled 相同：AsyncSection 的 .loading-slot 不在了
+        for (let i = 0; i < 100; i++) {
+          if (await page.evaluate(`!document.querySelector('.loading-slot')`) === true) break
+          await sleep(100)
+        }
+        await sleep(300)
         const r = JSON.parse(await page.evaluate(PROBE))
 
         const fits = r.scrollWidth <= r.innerWidth + 1
@@ -129,7 +139,7 @@ async function main() {
 
         console.log(`${ok ? 'OK  ' : 'FAIL'}  ${label.padEnd(12)} scrollWidth ${r.scrollWidth} / 视口 ${r.innerWidth}`)
         if (!fits) for (const item of r.over) console.log(`        撑出去的：${item}`)
-        // 同一条报错在两个宽度下都会出现，两次都报出来是对的——
+        // 同一条报错在几个宽度下都会出现，每次都报出来是对的——
         // 它说明的是「这一页坏了」，不是「这个宽度下坏了」
         for (const p of page.problems) console.log(`        运行时报错：${String(p).replace(/\s+/g, ' ').slice(0, 140)}`)
       }
@@ -179,7 +189,7 @@ async function main() {
 
   console.log(
     failed === 0
-      ? '两个宽度下都没有横向溢出、没有运行时报错，证书页在三种主题下都打得出来。'
+      ? '三个宽度下都没有横向溢出、没有运行时报错，证书页在三种主题下都打得出来。'
       : `${failed} 处不通过（横向溢出、运行时报错，或打印态的正文太浅）。`
   )
   process.exit(failed === 0 ? 0 : 1)
