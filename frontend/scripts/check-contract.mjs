@@ -32,6 +32,7 @@
  * 真接口模式下走 fetch，身份用 `X-Member-Id`（docs/API.md §0）。
  */
 import * as mock from '../src/mock/handlers.js'
+import { compareUtf8 } from '../src/utils/percentage.js'
 
 const BASE = process.env.CONTRACT_BASE ?? ''
 const AS = process.env.CONTRACT_MEMBER ?? 'alice'
@@ -133,6 +134,9 @@ const SCHEMA = {
     description: R.str,
     fileName: R.str,
     fileHash: R.hex64OrEmpty,
+    // PR #28：提交者与创建时的确认人快照
+    submitterId: R.str,
+    requiredConfirmerIds: R.strArray,
     contributors: { each: 'Contributor' },
     confirmations: { each: 'Confirmation' },
     createdAt: R.iso,
@@ -218,6 +222,34 @@ function validate(value, typeName, where, problems = []) {
     if (EXTRA === 'note') extras.add(`${where.split('[')[0]}.${key}`)
     else problems.push(`${where} 多了字段 ${key}`)
   }
+  return problems
+}
+
+/**
+ * 独立确认的语义（PR #28），形状对了之后再量这几条：
+ *
+ *   - 提交者不在确认人快照里；
+ *   - 快照按 UTF-8 字节序升序、没有重复；
+ *   - 快照非空（项目至少两名成员）；
+ *   - 表态的人都在快照里——提交者自己表态了，说明后端还在按旧规则走。
+ *
+ * 只看单个 Milestone 自己的字段，不去比对项目成员：
+ * 成员后来变了的话快照不跟着变，那时两边本来就对不上。
+ */
+function confirmerProblems(m, where) {
+  if (!m || typeof m !== 'object' || !Array.isArray(m.requiredConfirmerIds)) return []
+  const ids = m.requiredConfirmerIds
+  const problems = []
+  if (ids.includes(m.submitterId)) problems.push(`${where} 的确认人里有提交者 ${m.submitterId}`)
+  if (ids.length === 0) problems.push(`${where} 没有任何确认人`)
+  const sorted = [...new Set(ids)].sort(compareUtf8)
+  if (JSON.stringify(sorted) !== JSON.stringify(ids)) {
+    problems.push(`${where} 的确认人没按字节序排列或有重复：${JSON.stringify(ids)}`)
+  }
+  const outsiders = (Array.isArray(m.confirmations) ? m.confirmations : [])
+    .map((c) => c?.memberId)
+    .filter((id) => !ids.includes(id))
+  if (outsiders.length) problems.push(`${where} 有不在确认人名单里的表态：${outsiders.join('、')}`)
   return problems
 }
 
@@ -314,6 +346,12 @@ async function main() {
   }
 
   report(
+    '里程碑的确认人快照符合独立确认规则',
+    milestones.flatMap((m, i) => confirmerProblems(m, `milestones[${i}]`)),
+    `${milestones.length} 条`
+  )
+
+  report(
     'GET /projects/:id/contributions 形状正确',
     validate(await CALLS.getContributions(first.projectId), 'Contributions', 'contributions')
   )
@@ -360,17 +398,22 @@ async function main() {
       contributors: [
         { memberId: AS, percentage: 50 },
         { memberId: 'bob', percentage: 50 }
-      ]
+      ],
+      submitterId: AS
     })
     report('POST /projects/:id/milestones 回的是 Milestone', validate(m, 'Milestone', '新建里程碑'))
+    report('新建里程碑的确认人快照符合独立确认规则', confirmerProblems(m, '新建里程碑'),
+      `${m.submitterId} 提交 → ${m.requiredConfirmerIds.join('、')} 确认`)
 
-    const confirmed = await mock.confirmMilestone(m.milestoneId, { memberId: AS, decision: 'CONFIRMED' })
+    // 提交者自己不能表态（PR #28），由快照里的人逐个确认
+    const [firstConfirmer, ...others] = m.requiredConfirmerIds
+    const confirmed = await mock.confirmMilestone(m.milestoneId, { memberId: firstConfirmer, decision: 'CONFIRMED' })
     report(
       'POST /milestones/:id/confirmations 回的是完整 Milestone',
       validate(confirmed, 'Milestone', '表态后的里程碑')
     )
 
-    await mock.confirmMilestone(m.milestoneId, { memberId: 'bob', decision: 'CONFIRMED' })
+    for (const id of others) await mock.confirmMilestone(m.milestoneId, { memberId: id, decision: 'CONFIRMED' })
     const cert = await mock.createCertificate(created.projectId, { memberId: AS })
     report('POST /projects/:id/certificates 回的是 Certificate', validate(cert, 'Certificate', '新签发的证书'))
   } else {

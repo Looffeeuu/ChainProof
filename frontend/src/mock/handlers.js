@@ -92,8 +92,30 @@ export async function getMilestone(milestoneId) {
   return clone(found)
 }
 
+/**
+ * 提交里程碑。
+ *
+ * 提交者是谁：真接口读请求头 `X-Member-Id`（docs/API.md §3），假接口拿不到请求头，
+ * 所以由 `api/milestones.js` 显式传一个 `submitterId` 进来——和 confirmMilestone 收 memberId 同理。
+ *
+ * 校验顺序照后端与链码（PR #28）：缺提交者 → 项目不存在 → 提交者不是成员 → 成员不足两人
+ * → 比例总和 → 文件大小。
+ */
 export async function createMilestone(projectId, payload) {
   await delay()
+  const submitterId = typeof payload.submitterId === 'string' ? payload.submitterId.trim() : ''
+  if (!submitterId) {
+    throw fail('VALIDATION_ERROR', '请求头 X-Member-Id 为必填项。')
+  }
+  const project = db.projects.find((p) => p.projectId === projectId)
+  if (!project) throw fail('PROJECT_NOT_FOUND', `没有找到项目 ${projectId}。`, 404)
+  if (!project.members.includes(submitterId)) {
+    throw fail('VALIDATION_ERROR', `提交者 ${submitterId} 不属于项目 ${projectId} 的成员。`)
+  }
+  if (new Set(project.members).size < 2) {
+    throw fail('VALIDATION_ERROR', '项目至少需要两名成员，才能由提交者以外的成员独立确认贡献。')
+  }
+
   const total = (payload.contributors ?? []).reduce((sum, c) => sum + c.percentage, 0)
   // 这条校验前端已经拦过一次（spec/01 §2.6），这里再拦一次是为了让
   // 「接口拒绝」这条路径在开发时也能被走到、被看见
@@ -111,6 +133,12 @@ export async function createMilestone(projectId, payload) {
     description: payload.description ?? '',
     fileName: payload.fileName ?? '',
     fileHash: payload.fileHash ?? '',
+    submitterId,
+    // 确认人快照：创建这一刻除提交者外的全部成员，按 UTF-8 字节序（与链码同一个排序）。
+    // 之后项目成员再变，这份名单也不跟着变
+    requiredConfirmerIds: [...new Set(project.members)]
+      .filter((id) => id !== submitterId)
+      .sort(compareUtf8),
     contributors: clone(payload.contributors ?? []),
     confirmations: [],
     createdAt: new Date().toISOString(),
@@ -124,28 +152,36 @@ export async function createMilestone(projectId, payload) {
 
 /**
  * 提交一次确认，返回**更新后的完整 Milestone**（docs/API.md §3）。
+ *
+ * 判定顺序照链码 ConfirmContribution（PR #28），**顺序本身就是规则**：
+ * 已关闭 → 提交者本人 → 不在确认人快照里 → 已经表过态。
+ * 确认资格只看 requiredConfirmerIds，与 contributors 无关。
  */
 export async function confirmMilestone(milestoneId, { memberId, decision }) {
   await delay()
   const found = db.milestones.find((m) => m.milestoneId === milestoneId)
   if (!found) throw fail('MILESTONE_NOT_FOUND', `没有找到里程碑 ${milestoneId}。`, 404)
 
-  if (!found.contributors.some((c) => c.memberId === memberId)) {
-    throw fail('MEMBER_NOT_IN_CLAIM', `${memberId} 不在这份贡献声明里，无法确认。`, 403)
+  if (found.status !== 'PENDING_CONFIRMATION') {
+    throw fail('MILESTONE_CLOSED', '这条里程碑已经有结果了，不再接受确认。', 409)
+  }
+  if (memberId === found.submitterId) {
+    throw fail('SUBMITTER_CANNOT_CONFIRM', `提交者 ${memberId} 不能确认或拒绝自己提交的里程碑。`, 403)
+  }
+  if (!found.requiredConfirmerIds.includes(memberId)) {
+    throw fail('MEMBER_NOT_REVIEWER', `${memberId} 不是里程碑 ${milestoneId} 的确认人。`, 403)
   }
   if (found.confirmations.some((c) => c.memberId === memberId)) {
     throw fail('ALREADY_DECIDED', `${memberId} 已经表过态了，不能重复提交。`, 409)
   }
-  if (found.status !== 'PENDING_CONFIRMATION') {
-    throw fail('MILESTONE_CLOSED', '这条里程碑已经有结果了，不再接受确认。', 409)
-  }
 
   found.confirmations.push({ memberId, decision, timestamp: new Date().toISOString() })
 
-  // 一人拒绝即整条拒绝；全员确认才验证通过（docs/API.md §3，B 线已按此实现）
+  // 任一确认人拒绝即整条拒绝；全部确认人都确认才验证通过（docs/API.md §3）
+  const decided = new Map(found.confirmations.map((c) => [c.memberId, c.decision]))
   if (decision === 'REJECTED') {
     found.status = 'REJECTED'
-  } else if (found.confirmations.length === found.contributors.length) {
+  } else if (found.requiredConfirmerIds.every((id) => decided.get(id) === 'CONFIRMED')) {
     found.status = 'VERIFIED'
   }
   // 状态变了就换一个新的 txId：里程碑上挂的那个，指的是

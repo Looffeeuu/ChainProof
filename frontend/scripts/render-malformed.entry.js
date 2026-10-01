@@ -71,11 +71,14 @@ const milestone = {
   description: '一句说明',
   fileName: 'x.zip',
   fileHash: 'b'.repeat(64),
+  // PR #28 的两个字段。variants() 按键逐个做手脚，所以它们缺失、为 null、类型不对的情况自动都有
+  submitterId: 'alice',
+  requiredConfirmerIds: ['bob'],
   contributors: [
     { memberId: 'alice', percentage: 60 },
     { memberId: 'bob', percentage: 40 }
   ],
-  confirmations: [{ memberId: 'alice', decision: 'CONFIRMED', timestamp: '2026-09-02T00:00:00.000Z' }],
+  confirmations: [{ memberId: 'bob', decision: 'CONFIRMED', timestamp: '2026-09-02T00:00:00.000Z' }],
   createdAt: '2026-09-01T01:00:00.000Z',
   status: 'PENDING_CONFIRMATION',
   txId: 'c'.repeat(64)

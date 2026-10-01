@@ -73,7 +73,7 @@ const Harness = {
             { memberId: 'bob', percentage: 55 }
           ]
         }),
-        // 声明表：M004 里 alice/bob 已表态、charlie 还没，三种行状态一次能看全
+        // 声明表：M004 由 alice 提交，bob 已确认、charlie 还没——提交者、已表态、等待中三种行一次能看全
         h(ContributionBreakdown, {
           milestones: p001,
           members: [

@@ -15,6 +15,10 @@ export const getMilestone = (milestoneId) =>
 /**
  * 提交里程碑。真接口是 multipart/form-data（docs/API.md §3），
  * 所以这里把对象转成 FormData；假数据直接吃对象。
+ *
+ * 提交者（submitterId）真接口取自请求头 `X-Member-Id`，由 client.js 统一带上，
+ * **不进表单**——两处都写的话，一旦不一致就说不清以哪个为准。
+ * 假接口拿不到请求头，所以 payload 里显式带一个 submitterId 给它。
  */
 export const createMilestone = (projectId, payload) => {
   if (useMock('createMilestone')) return mock.createMilestone(projectId, payload)

@@ -128,7 +128,7 @@ const issueBlockedReason = computed(() => {
     return '这个项目的累计贡献比例暂时读不到，刷新页面再试。'
   }
   if (basedOn.value === 0) {
-    return '这个项目还没有任何一条里程碑通过全员确认。至少有一条之后，才能签发贡献证明。'
+    return '这个项目还没有任何一条里程碑通过所有确认人的确认。至少有一条之后，才能签发贡献证明。'
   }
   // 逐字照接口的 NO_VERIFIED_CONTRIBUTION 提示，页面与接口说同一句话
   if (myShare.value === 0) return '累计贡献比例为 0%，不能签发证书。'

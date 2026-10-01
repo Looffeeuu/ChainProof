@@ -386,8 +386,12 @@ async function 验证页换编号不留旧结果(page) {
  * 0% 成员看得到签发按钮，但按钮是灰的，旁边逐字写着接口的那句提示。
  *
  * 组长任务单的验收项：「0% 成员显示正常但不能签发证书」。假数据里没有现成的 0% 成员，
- * 所以现场造一个：P003（alice、charlie）里提交一条只有 alice 的里程碑并确认，
- * 然后**不刷新页面**切到 charlie——一刷新，内存里的假数据就还原了。
+ * 所以现场造一个：P003（alice、charlie）里由 alice 提交一条只有她自己的里程碑，
+ * 然后**不刷新页面**切身份——一刷新，内存里的假数据就还原了。
+ *
+ * 顺路把 PR #28 的三种视角走一遍，它们正好都在这条链上：
+ * alice 是提交者，没有确认入口；bob 不在 P003，不是确认人；
+ * charlie 分到 0%，却是唯一的确认人，由他确认之后这条才变成已验证。
  *
  * —— 为什么不用固定等待 ——
  *
@@ -453,13 +457,25 @@ async function 零贡献成员不能签发(page) {
     const milestonePath = location.pathname
     await $settled()
 
-    ;(await $until(() => $btn('确认这份声明'), '确认按钮')).click()
+    // 提交者自己没有确认入口，只有一句说明（PR #28）
+    await $until(() => ($text('.gate-reason') ?? '').includes('不能确认自己的提交'), '提交者看到的说明')
+    const asSubmitter = { button: Boolean($btn('确认这份声明')), why: $text('.gate-reason') }
+
+    // bob 不是 P003 的成员，也就不在确认人名单里
+    await $pick('bob')
+    await $until(() => ($text('.gate-reason') ?? '').includes('不是本里程碑确认人'), '非确认人看到的说明')
+    const asOutsider = { button: Boolean($btn('确认这份声明')), why: $text('.gate-reason') }
+
+    // charlie 在这条里分到 0%，但他是唯一的确认人
+    await $pick('charlie')
+    const confirmBtn = await $until(() => $btn('确认这份声明'), 'charlie 的确认按钮')
+    const zeroAsk = $text('.ask')
+    confirmBtn.click()
     // .done 是确认成功后的那句反馈；它出来了，这一步才算真的走完
     await $until(() => document.querySelector('.done'), '确认成功的反馈')
     await $settled()
     const badge = $text('.badge')
 
-    await $pick('charlie')
     await $goto('/projects/P003', () => $btn('签发我的贡献证明'), '以 charlie 打开 P003')
 
     const btn = $btn('签发我的贡献证明')
@@ -478,8 +494,15 @@ async function 零贡献成员不能签发(page) {
       disabled: $btn('签发我的贡献证明')?.disabled ?? null,
       note: $text('.issue p')
     }
-    return JSON.stringify({ milestonePath, badge, charlie, alice })
+    return JSON.stringify({ milestonePath, badge, charlie, alice, asSubmitter, asOutsider, zeroAsk })
   })()`)
+
+  assert('提交者没有确认按钮', r.asSubmitter.button === false, `button=${r.asSubmitter.button}`)
+  assert('提交者看到「不能确认自己的提交」', String(r.asSubmitter.why).includes('不能确认自己的提交'), r.asSubmitter.why)
+  assert('非确认人没有确认按钮', r.asOutsider.button === false, `button=${r.asOutsider.button}`)
+  assert('非确认人看到「不是本里程碑确认人」', String(r.asOutsider.why).includes('不是本里程碑确认人'), r.asOutsider.why)
+  assert('0% 的确认人看到的是「没有给你分配比例」，不是「0% 记在你名下」',
+    String(r.zeroAsk).includes('没有给你分配比例'), r.zeroAsk)
 
   assert('里程碑提交并确认成已验证', String(r.badge).includes('链上已验证'), `${r.milestonePath} · ${r.badge}`)
   assert('0% 成员仍然出现在面板里', r.charlie.rows.some((x) => x.includes('charlie') && x.endsWith('0%')),
@@ -490,6 +513,44 @@ async function 零贡献成员不能签发(page) {
     `aria-describedby=${r.charlie.describedBy}`)
   assert('切回 alice（100%）按钮可以点', r.alice.disabled === false, `disabled=${r.alice.disabled}`)
   assert('alice 看得到自己的比例', String(r.alice.note).includes('100%'), r.alice.note)
+}
+
+/**
+ * 提交页提前说清「提交之后谁来确认」，不是成员的人打开时直接拦下（PR #28）。
+ *
+ * 确认人是项目里除提交者外的全部成员，与比例怎么分无关——不在提交前说出来，
+ * 用户会以为「没分比例的人不用管」。不是成员的人提交，后端会回 400，
+ * 但表单填完才知道就晚了，所以在表单最上面先说。
+ */
+async function 提交页说清谁来确认(page) {
+  await goAs(page, 'alice', '/projects/P001/milestones/new', '.allocator')
+  await page.evaluate(HELPERS)
+  const member = await evalJSON(page, `(async () => {
+    await $until(() => $text('.confirmers'), '确认人提示')
+    return JSON.stringify({ confirmers: $text('.confirmers'), blocked: $text('.blocked') })
+  })()`)
+  assert('列出了提交后由谁确认', String(member.confirmers).includes('bob、charlie'), member.confirmers)
+  assert('说明提交者自己不参与确认', String(member.confirmers).includes('不参与确认'), member.confirmers)
+  assert('项目成员不会被拦', member.blocked === null, `blocked=${member.blocked}`)
+
+  // bob 不在 P003（成员只有 alice、charlie）
+  await goAs(page, 'bob', '/projects/P003/milestones/new', 'form')
+  await page.evaluate(HELPERS)
+  const outsider = await evalJSON(page, `(async () => {
+    await $until(() => $text('.blocked'), '非成员的拦截提示')
+    ;(await $until(() => $btn('提交并存证'), '提交按钮')).click()
+    await $wait(300)
+    return JSON.stringify({
+      blocked: $text('.blocked'),
+      why: $text('.why'),
+      path: location.pathname,
+      confirmers: $text('.confirmers')
+    })
+  })()`)
+  assert('非成员打开时表单上方说清为什么', String(outsider.blocked).includes('不是这个项目的成员'), outsider.blocked)
+  assert('按钮旁边说的是同一个原因', String(outsider.why).includes('不是这个项目的成员'), outsider.why)
+  assert('点提交不会离开这一页', outsider.path === '/projects/P003/milestones/new', outsider.path)
+  assert('被拦时不显示确认人提示', outsider.confirmers === null, `confirmers=${outsider.confirmers}`)
 }
 
 /**
@@ -713,6 +774,7 @@ const SCENARIOS = [
   ['取消哈希后不许提交', 取消哈希后不许提交],
   ['超限文件当场拦下', 超限文件当场拦下],
   ['零贡献成员不能签发', 零贡献成员不能签发],
+  ['提交页说清谁来确认', 提交页说清谁来确认],
   ['验证页换编号不留旧结果', 验证页换编号不留旧结果],
   ['比例超出时横条溢出', 比例超出时横条溢出],
   ['拒绝要二次确认', 拒绝要二次确认],
