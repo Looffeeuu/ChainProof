@@ -70,7 +70,7 @@ echo ""
 # ─── Step 1: 关闭旧网络 ──────────────────────────────────────────────────────
 
 info "Step 1/5: 关闭 Fabric 网络..."
-if [[ -x "${NETWORK_SCRIPT}" ]]; then
+if [[ -f "${NETWORK_SCRIPT}" ]]; then
   bash "${NETWORK_SCRIPT}" down || warn "网络可能未运行，继续..."
 else
   fatal "找不到网络脚本: ${NETWORK_SCRIPT}"

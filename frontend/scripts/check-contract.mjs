@@ -258,12 +258,17 @@ function confirmerProblems(m, where) {
 // ——————————————————————————————————————————————————————————
 
 async function http(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, {
+  const url = new URL(String(path).replace(/^\/+/, ''), BASE)
+  const res = await fetch(url, {
     ...options,
     headers: { 'Content-Type': 'application/json', 'X-Member-Id': AS, ...(options.headers ?? {}) }
   })
   if (res.status === 204) return null
-  return res.json()
+  const payload = await res.json().catch(() => null)
+  if (!res.ok) {
+    throw new Error(`${res.status} ${res.statusText}: ${JSON.stringify(payload)}`)
+  }
+  return payload
 }
 
 /**
