@@ -14,7 +14,7 @@ import AsyncSection from '../components/base/AsyncSection.vue'
 import ClaimTable from '../components/milestone/ClaimTable.vue'
 import ConfirmProgress from '../components/milestone/ConfirmProgress.vue'
 import { useAsync } from '../composables/useAsync.js'
-import { getMilestone, confirmMilestone } from '../api/milestones.js'
+import { getMilestone, confirmMilestone, downloadMilestoneFile } from '../api/milestones.js'
 import { getProject } from '../api/projects.js'
 import { formatDateTime } from '../utils/format-time.js'
 import { asObjectList } from '../utils/list.js'
@@ -80,6 +80,24 @@ const gateReason = computed(() => {
 
 const deciding = ref('')       // 'CONFIRMED' | 'REJECTED' | ''：哪个按钮在转圈
 const decideError = ref(null)
+const downloading = ref(false)
+const downloadError = ref(null)
+
+/**
+ * 下载链下托管的原始文件。下载失败时把错误留在页面上，
+ * 而不是用 alert——同一个页面已经有 ErrorNotice 的模式，保持一致。
+ */
+async function download() {
+  downloading.value = true
+  downloadError.value = null
+  try {
+    await downloadMilestoneFile(route.params.id)
+  } catch (e) {
+    downloadError.value = e
+  } finally {
+    downloading.value = false
+  }
+}
 
 /**
  * 刚刚表完态时记下结果，用来给一条明确的成功反馈。
@@ -216,6 +234,21 @@ async function decide(decision) {
           :expected="milestone.fileHash"
           label="你手上的那份成果文件"
         />
+
+        <!-- 下载按钮。放在 FileHashCheck 之后：先让用户知道自己要核对什么，
+             再给一个「把文件拿下来核对」的动作。下载失败时显示错误，
+             和页面其他地方的 ErrorNotice 保持一致。 -->
+        <div class="download-row">
+          <BaseButton
+            variant="secondary"
+            :loading="downloading"
+            loading-text="下载中…"
+            @click="download"
+          >
+            下载原始文件
+          </BaseButton>
+          <ErrorNotice v-if="downloadError" :error="downloadError" title="下载失败" />
+        </div>
       </BaseCard>
 
       <BaseCard padding="none" class="block">
@@ -305,6 +338,14 @@ async function decide(decision) {
 .block { margin-bottom: var(--sp-4); }
 
 .check-intro { margin-bottom: var(--sp-3); max-width: 68ch; }
+
+.download-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--sp-4);
+}
 
 .file { display: grid; grid-template-columns: 120px 1fr; gap: var(--sp-2) var(--sp-4); margin: 0 0 var(--sp-4); }
 .file dt { padding-top: var(--sp-1); }

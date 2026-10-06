@@ -309,3 +309,26 @@ export async function verifyCertificate(certificateId) {
     certificate: clone(found)
   }
 }
+
+/**
+ * 下载里程碑文件。假接口没有真实文件，造一个文本 blob 演示下载流程。
+ * 真接口返回的是链下托管的原始文件（docs/API.md §3）。
+ */
+export async function downloadMilestoneFile(milestoneId) {
+  await delay()
+  const found = db.milestones.find((m) => m.milestoneId === milestoneId)
+  if (!found) throw fail('FILE_NOT_FOUND', `里程碑 ${milestoneId} 的链下文件不存在。`, 404)
+
+  const content = `这是里程碑 ${milestoneId} 的演示文件。\n\n标题：${found.title}\n文件哈希：${found.fileHash}\n`
+  const blob = new Blob([content], { type: 'text/plain' })
+  const fileName = found.fileName || `${milestoneId}.txt`
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
