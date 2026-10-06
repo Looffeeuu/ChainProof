@@ -86,8 +86,10 @@ success "网络已启动"
 # ─── Step 3: 部署链码 ────────────────────────────────────────────────────────
 
 info "Step 3/5: 部署最新链码..."
-bash "${NETWORK_SCRIPT}" deploy
-success "链码已部署"
+# 上一步刚清空账本并创建了全新通道，首个链码定义必须从 sequence 1 开始。
+# config.env 默认 sequence 2 用于升级已有开发网络；这里显式覆盖。
+CC_SEQUENCE=1 bash "${NETWORK_SCRIPT}" deploy
+success "链码已部署（全新通道 sequence 1）"
 
 # ─── Step 4: 启动 Backend ────────────────────────────────────────────────────
 
