@@ -20,6 +20,7 @@ async function seedFixture (contract, ctx) {
   await contract.CreateProject(ctx, 'P002', 'Other', 'd', 'bob', JSON.stringify(['bob', 'charlie']))
 
   // M001: alice 42 / bob 31 / charlie 27 -> 全部确认 -> VERIFIED
+  // submitter=alice -> requiredConfirmerIds=['bob','charlie']
   ctx.stub.setTimestamp('2026-09-11T10:00:00.000Z')
   await contract.CreateMilestone(
     ctx, 'M001', 'P001', '需求与设计', 'd', 'spec.zip', HASH_A,
@@ -27,32 +28,36 @@ async function seedFixture (contract, ctx) {
       { memberId: 'alice', percentage: 42 },
       { memberId: 'bob', percentage: 31 },
       { memberId: 'charlie', percentage: 27 }
-    ])
+    ]),
+    'alice'
   )
-  await contract.ConfirmContribution(ctx, 'M001', 'alice', 'CONFIRMED')
   await contract.ConfirmContribution(ctx, 'M001', 'bob', 'CONFIRMED')
   await contract.ConfirmContribution(ctx, 'M001', 'charlie', 'CONFIRMED')
 
   // M002: alice 50 / charlie 50 -> 被拒绝 -> REJECTED（不计入统计）
+  // submitter=bob -> requiredConfirmerIds=['alice','charlie']
   ctx.stub.setTimestamp('2026-09-12T10:00:00.000Z')
   await contract.CreateMilestone(
     ctx, 'M002', 'P001', '原型实现', 'd', 'proto.zip', HASH_B,
     JSON.stringify([
       { memberId: 'alice', percentage: 50 },
       { memberId: 'charlie', percentage: 50 }
-    ])
+    ]),
+    'bob'
   )
   await contract.ConfirmContribution(ctx, 'M002', 'alice', 'CONFIRMED')
   await contract.ConfirmContribution(ctx, 'M002', 'charlie', 'REJECTED')
 
   // M003: alice 60 / bob 40 -> 仅 alice 确认 -> PENDING（不计入统计）
+  // submitter=bob -> requiredConfirmerIds=['alice','charlie']，仅 alice 确认 -> PENDING
   ctx.stub.setTimestamp('2026-09-13T10:00:00.000Z')
   await contract.CreateMilestone(
     ctx, 'M003', 'P001', '测试与部署', 'd', 'deploy.zip', HASH_C,
     JSON.stringify([
       { memberId: 'alice', percentage: 60 },
       { memberId: 'bob', percentage: 40 }
-    ])
+    ]),
+    'bob'
   )
   await contract.ConfirmContribution(ctx, 'M003', 'alice', 'CONFIRMED')
 }
@@ -94,9 +99,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
         { memberId: 'alice', percentage: 60 },
         { memberId: 'bob', percentage: 20 },
         { memberId: 'charlie', percentage: 20 }
-      ])
+      ]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M004', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M004', 'bob', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M004', 'charlie', 'CONFIRMED')
 
@@ -136,9 +141,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
         { memberId: 'alice', percentage: 40 },
         { memberId: 'bob', percentage: 35 },
         { memberId: 'charlie', percentage: 25 }
-      ])
+      ]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M100', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M100', 'bob', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M100', 'charlie', 'CONFIRMED')
 
@@ -149,9 +154,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
         { memberId: 'alice', percentage: 60 },
         { memberId: 'bob', percentage: 20 },
         { memberId: 'charlie', percentage: 20 }
-      ])
+      ]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M101', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M101', 'bob', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M101', 'charlie', 'CONFIRMED')
 
@@ -174,9 +179,10 @@ describe('ChainProofContract - GetProjectContributions', () => {
       JSON.stringify([
         { memberId: 'alice', percentage: 70 },
         { memberId: 'charlie', percentage: 30 }
-      ])
+      ]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M005', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M005', 'bob', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M005', 'charlie', 'CONFIRMED')
 
     const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P001'))
@@ -210,13 +216,15 @@ describe('ChainProofContract - GetProjectContributions', () => {
     ctx.stub.setTimestamp('2026-09-15T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M010', 'P003', 'rejected', 'd', 'x.zip', HASH_A,
-      JSON.stringify([{ memberId: 'alice', percentage: 50 }, { memberId: 'bob', percentage: 50 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 50 }, { memberId: 'bob', percentage: 50 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M010', 'alice', 'REJECTED')
+    await contract.ConfirmContribution(ctx, 'M010', 'bob', 'REJECTED')
     ctx.stub.setTimestamp('2026-09-16T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M011', 'P003', 'pending', 'd', 'y.zip', HASH_B,
-      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }]),
+      'alice'
     )
 
     const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P003'))
@@ -247,14 +255,16 @@ describe('ChainProofContract - GetProjectContributions', () => {
     ctx.stub.setTimestamp('2026-09-20T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M050', 'P050', 'only alice', 'd', 'a.zip', HASH_A,
-      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M050', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M050', 'bob', 'CONFIRMED')
 
     ctx.stub.setTimestamp('2026-09-21T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M051', 'P050', 'only bob', 'd', 'b.zip', HASH_B,
-      JSON.stringify([{ memberId: 'bob', percentage: 100 }])
+      JSON.stringify([{ memberId: 'bob', percentage: 100 }]),
+      'alice'
     )
     await contract.ConfirmContribution(ctx, 'M051', 'bob', 'CONFIRMED')
 
@@ -284,9 +294,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
         { memberId: 'bob', percentage: 25 },
         { memberId: 'charlie', percentage: 25 },
         { memberId: 'dave', percentage: 25 }
-      ])
+      ]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_TIE1', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_TIE1', 'bob', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_TIE1', 'charlie', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_TIE1', 'dave', 'CONFIRMED')
@@ -299,9 +309,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
         { memberId: 'bob', percentage: 26 },
         { memberId: 'charlie', percentage: 24 },
         { memberId: 'dave', percentage: 24 }
-      ])
+      ]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_TIE2', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_TIE2', 'bob', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_TIE2', 'charlie', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_TIE2', 'dave', 'CONFIRMED')
@@ -332,9 +342,11 @@ describe('ChainProofContract - GetProjectContributions', () => {
     ctx.stub.setTimestamp('2026-09-25T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M_UTF8', 'P_UTF8', 'only alice', 'd', 'a.zip', HASH_A,
-      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_UTF8', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_UTF8', 'B', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_UTF8', 'a', 'CONFIRMED')
 
     const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P_UTF8'))
     expect(result.members.map((m) => m.memberId)).toEqual(['B', 'a', 'alice'])
@@ -363,9 +375,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
         { memberId: 'B', percentage: 1 },
         { memberId: 'C', percentage: 1 },
         { memberId: 'a', percentage: 98 }
-      ])
+      ]),
+      'B'
     )
-    await contract.ConfirmContribution(ctx, 'M_1OF3_1', 'B', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_1OF3_1', 'C', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_1OF3_1', 'a', 'CONFIRMED')
 
@@ -376,9 +388,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
         { memberId: 'B', percentage: 1 },
         { memberId: 'C', percentage: 1 },
         { memberId: 'a', percentage: 98 }
-      ])
+      ]),
+      'B'
     )
-    await contract.ConfirmContribution(ctx, 'M_1OF3_2', 'B', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_1OF3_2', 'C', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_1OF3_2', 'a', 'CONFIRMED')
 
@@ -389,9 +401,9 @@ describe('ChainProofContract - GetProjectContributions', () => {
         { memberId: 'B', percentage: 2 },
         { memberId: 'C', percentage: 2 },
         { memberId: 'a', percentage: 96 }
-      ])
+      ]),
+      'B'
     )
-    await contract.ConfirmContribution(ctx, 'M_1OF3_3', 'B', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_1OF3_3', 'C', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_1OF3_3', 'a', 'CONFIRMED')
 
@@ -418,10 +430,11 @@ describe('ChainProofContract - GetProjectContributions', () => {
       JSON.stringify([
         { memberId: 'alice', percentage: 60 },
         { memberId: 'bob', percentage: 40 }
-      ])
+      ]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_ZERO1', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_ZERO1', 'bob', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_ZERO1', 'zero-member', 'CONFIRMED')
 
     const result = JSON.parse(await contract.GetProjectContributions(ctx, 'P_ZERO'))
 
@@ -477,31 +490,34 @@ describe('ChainProofContract - Certificate', () => {
   test('milestoneIds 按 createdAt 正序、时间相同再按 milestoneId 升序', async () => {
     // 构造多个 VERIFIED 里程碑，验证排序规则
     await contract.CreateProject(ctx, 'P_SORT', 'sort test', 'd', 'alice',
-      JSON.stringify(['alice']))
+      JSON.stringify(['alice', 'bob']))
 
     // 同一时间戳创建两个里程碑，验证 milestoneId 作为次级排序键
     ctx.stub.setTimestamp('2026-09-25T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M_SORT_B', 'P_SORT', 'second by id', 'd', 'b.zip', HASH_B,
-      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_SORT_B', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_SORT_B', 'bob', 'CONFIRMED')
 
     // 更早的时间戳，应该排在前面
     ctx.stub.setTimestamp('2026-09-24T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M_SORT_A', 'P_SORT', 'first by time', 'd', 'a.zip', HASH_A,
-      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_SORT_A', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_SORT_A', 'bob', 'CONFIRMED')
 
     // 与 M_SORT_B 相同时间戳，但 milestoneId 更大
     ctx.stub.setTimestamp('2026-09-25T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M_SORT_C', 'P_SORT', 'same time later id', 'd', 'c.zip', HASH_C,
-      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_SORT_C', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_SORT_C', 'bob', 'CONFIRMED')
 
     ctx.stub.nextTransaction('tx-issue-sort')
     const certificate = JSON.parse(await contract.IssueCertificate(ctx, 'CP-SORT', 'P_SORT', 'alice'))
@@ -518,9 +534,10 @@ describe('ChainProofContract - Certificate', () => {
     ctx.stub.setTimestamp('2026-09-26T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M_FILTER1', 'P_FILTER', 'alice 100%', 'd', 'a.zip', HASH_A,
-      JSON.stringify([{ memberId: 'alice', percentage: 100 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 100 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_FILTER1', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M_FILTER1', 'bob', 'CONFIRMED')
 
     // bob 在这个里程碑中 percentage = 0（alice 100%，bob 0%）
     ctx.stub.setTimestamp('2026-09-27T10:00:00.000Z')
@@ -529,9 +546,9 @@ describe('ChainProofContract - Certificate', () => {
       JSON.stringify([
         { memberId: 'alice', percentage: 100 },
         { memberId: 'bob', percentage: 0 }
-      ])
+      ]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M_FILTER2', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M_FILTER2', 'bob', 'CONFIRMED')
 
     // bob 累计贡献为 0%，应被拒绝签发
@@ -632,10 +649,11 @@ describe('ChainProofContract - Certificate', () => {
     ctx.stub.setTimestamp('2026-09-18T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M020', 'P004', 'only alice and bob', 'd', 'z.zip', HASH_A,
-      JSON.stringify([{ memberId: 'alice', percentage: 60 }, { memberId: 'bob', percentage: 40 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 60 }, { memberId: 'bob', percentage: 40 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M020', 'alice', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M020', 'bob', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M020', 'charlie', 'CONFIRMED')
 
     // charlie 是项目成员但累计贡献为 0%
     ctx.stub.nextTransaction('tx-issue-zero')
@@ -654,17 +672,20 @@ describe('ChainProofContract - Certificate', () => {
     ctx.stub.setTimestamp('2026-09-18T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M030', 'P005', 'alice and charlie', 'd', 'a.zip', HASH_A,
-      JSON.stringify([{ memberId: 'alice', percentage: 99 }, { memberId: 'charlie', percentage: 1 }])
+      JSON.stringify([{ memberId: 'alice', percentage: 99 }, { memberId: 'charlie', percentage: 1 }]),
+      'alice'
     )
-    await contract.ConfirmContribution(ctx, 'M030', 'alice', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M030', 'bob', 'CONFIRMED')
     await contract.ConfirmContribution(ctx, 'M030', 'charlie', 'CONFIRMED')
 
     ctx.stub.setTimestamp('2026-09-19T10:00:00.000Z')
     await contract.CreateMilestone(
       ctx, 'M031', 'P005', 'only bob', 'd', 'b.zip', HASH_B,
-      JSON.stringify([{ memberId: 'bob', percentage: 100 }])
+      JSON.stringify([{ memberId: 'bob', percentage: 100 }]),
+      'alice'
     )
     await contract.ConfirmContribution(ctx, 'M031', 'bob', 'CONFIRMED')
+    await contract.ConfirmContribution(ctx, 'M031', 'charlie', 'CONFIRMED')
 
     const contributions = JSON.parse(await contract.GetProjectContributions(ctx, 'P005'))
     const byMember = Object.fromEntries(contributions.members.map((m) => [m.memberId, m.percentage]))

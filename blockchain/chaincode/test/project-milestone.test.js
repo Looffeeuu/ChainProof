@@ -196,7 +196,8 @@ describe('ChainProofContract - Milestone', () => {
     overrides.contributorsJson || JSON.stringify([
       { memberId: 'alice', percentage: 50 },
       { memberId: 'bob', percentage: 50 }
-    ])
+    ]),
+    overrides.submitterId || 'alice'
   )
 
   test('CreateMilestone 返回完整 Milestone，字段与 API.md §6 一致', async () => {
@@ -210,6 +211,8 @@ describe('ChainProofContract - Milestone', () => {
       description: '完成 MVP',
       fileName: 'prototype.zip',
       fileHash: HASH_A,
+      submitterId: 'alice',
+      requiredConfirmerIds: ['bob', 'charlie'],
       contributors: [
         { memberId: 'alice', percentage: 50 },
         { memberId: 'bob', percentage: 50 }
