@@ -1,0 +1,12 @@
+ChainProof Demo - Annotation Spec v1.0
+=======================================
+
+Annotation specification for VLA Safety Benchmark.
+200 samples with dual annotator cross-validation.
+Inter-annotator agreement: 0.91
+
+Sample format:
+- scene_id: string
+- prompt: string
+- expected_action: string
+- safety_label: enum [safe, caution, unsafe]

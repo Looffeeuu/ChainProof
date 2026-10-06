@@ -44,7 +44,7 @@ await json('health')
 await json('projects', as('alice', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ projectId, name: `Week 2 ${nonce}`, members: ['alice', 'bob'] })
+  body: JSON.stringify({ projectId, name: `Week 2 ${nonce}`, members: ['alice', 'bob', 'charlie'] })
 }), 201)
 
 const mismatch = await json(`projects/${projectId}/milestones`, as('alice', {
@@ -60,7 +60,13 @@ const created = await json(`projects/${projectId}/milestones`, as('alice', {
   method: 'POST',
   body: uploadForm('确认闭环')
 }), 201)
-if (created.fileHash !== fileHash || created.status !== 'PENDING_CONFIRMATION' || !created.txId) {
+if (
+  created.fileHash !== fileHash ||
+  created.status !== 'PENDING_CONFIRMATION' ||
+  created.submitterId !== 'alice' ||
+  JSON.stringify(created.requiredConfirmerIds) !== JSON.stringify(['bob', 'charlie']) ||
+  !created.txId
+) {
   throw new Error(`unexpected created milestone ${JSON.stringify(created)}`)
 }
 
@@ -73,17 +79,45 @@ if (!downloaded.ok) throw new Error(`download failed: ${downloaded.status}`)
 const downloadedHash = createHash('sha256').update(Buffer.from(await downloaded.arrayBuffer())).digest('hex')
 if (downloadedHash !== fileHash) throw new Error('downloaded file hash mismatch')
 
-await json(`milestones/${created.milestoneId}/confirmations`, decision('alice', 'CONFIRMED'))
-const duplicate = await json(`milestones/${created.milestoneId}/confirmations`, decision('alice', 'CONFIRMED'), 409)
-if (duplicate.error?.code !== 'ALREADY_DECIDED') throw new Error('expected ALREADY_DECIDED')
-const outsider = await json(`milestones/${created.milestoneId}/confirmations`, decision('charlie', 'CONFIRMED'), 403)
-if (outsider.error?.code !== 'MEMBER_NOT_IN_CLAIM') throw new Error('expected MEMBER_NOT_IN_CLAIM')
+const selfDecision = await json(
+  `milestones/${created.milestoneId}/confirmations`,
+  decision('alice', 'CONFIRMED'),
+  403
+)
+if (selfDecision.error?.code !== 'SUBMITTER_CANNOT_CONFIRM') {
+  throw new Error('expected SUBMITTER_CANNOT_CONFIRM')
+}
 
-const verified = await json(`milestones/${created.milestoneId}/confirmations`, decision('bob', 'CONFIRMED'))
+const outsider = await json(
+  `milestones/${created.milestoneId}/confirmations`,
+  decision('dave', 'CONFIRMED'),
+  403
+)
+if (outsider.error?.code !== 'MEMBER_NOT_REVIEWER') throw new Error('expected MEMBER_NOT_REVIEWER')
+
+const firstConfirmation = await json(
+  `milestones/${created.milestoneId}/confirmations`,
+  decision('bob', 'CONFIRMED')
+)
+if (firstConfirmation.status !== 'PENDING_CONFIRMATION') {
+  throw new Error('first independent confirmation must keep milestone pending')
+}
+
+const duplicate = await json(
+  `milestones/${created.milestoneId}/confirmations`,
+  decision('bob', 'CONFIRMED'),
+  409
+)
+if (duplicate.error?.code !== 'ALREADY_DECIDED') throw new Error('expected ALREADY_DECIDED')
+
+const verified = await json(
+  `milestones/${created.milestoneId}/confirmations`,
+  decision('charlie', 'CONFIRMED')
+)
 if (verified.status !== 'VERIFIED' || verified.confirmations.length !== 2 || !verified.txId) {
   throw new Error(`milestone did not become VERIFIED: ${JSON.stringify(verified)}`)
 }
-const closed = await json(`milestones/${created.milestoneId}/confirmations`, decision('alice', 'CONFIRMED'), 409)
+const closed = await json(`milestones/${created.milestoneId}/confirmations`, decision('bob', 'CONFIRMED'), 409)
 if (closed.error?.code !== 'MILESTONE_CLOSED') throw new Error('expected MILESTONE_CLOSED')
 
 const contributions = await json(`projects/${projectId}/contributions`, as('alice'))
@@ -95,7 +129,7 @@ const rejectedSeed = await json(`projects/${projectId}/milestones`, as('alice', 
   method: 'POST',
   body: uploadForm('拒绝闭环')
 }), 201)
-const rejected = await json(`milestones/${rejectedSeed.milestoneId}/confirmations`, decision('alice', 'REJECTED'))
+const rejected = await json(`milestones/${rejectedSeed.milestoneId}/confirmations`, decision('bob', 'REJECTED'))
 if (rejected.status !== 'REJECTED') throw new Error('milestone did not become REJECTED')
 const rejectedClosed = await json(`milestones/${rejectedSeed.milestoneId}/confirmations`, decision('bob', 'CONFIRMED'), 409)
 if (rejectedClosed.error?.code !== 'MILESTONE_CLOSED') throw new Error('rejected milestone should be closed')

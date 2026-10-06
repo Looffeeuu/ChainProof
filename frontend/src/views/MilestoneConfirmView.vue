@@ -14,11 +14,12 @@ import AsyncSection from '../components/base/AsyncSection.vue'
 import ClaimTable from '../components/milestone/ClaimTable.vue'
 import ConfirmProgress from '../components/milestone/ConfirmProgress.vue'
 import { useAsync } from '../composables/useAsync.js'
-import { getMilestone, confirmMilestone } from '../api/milestones.js'
+import { getMilestone, confirmMilestone, downloadMilestoneFile } from '../api/milestones.js'
 import { getProject } from '../api/projects.js'
 import { formatDateTime } from '../utils/format-time.js'
+import { asObjectList } from '../utils/list.js'
 import { session } from '../stores/session.js'
-import { confirmGate } from '../utils/confirm-gate.js'
+import { confirmGate, confirmersOf, submitterOf } from '../utils/confirm-gate.js'
 
 /**
  * 贡献确认页。入口是项目详情 Timeline 每行的「查看声明」。
@@ -57,12 +58,19 @@ const me = computed(() => session.currentMemberId)
  */
 const gate = computed(() => confirmGate(milestone.value, me.value))
 
+/** 提交者与确认人（PR #28）。确认人是创建时的快照，提交者不在其中 */
+const submitter = computed(() => submitterOf(milestone.value))
+const confirmers = computed(() => confirmersOf(milestone.value))
+
 const gateReason = computed(() => {
   switch (gate.value.reason) {
     case 'CLOSED':
       return '这条里程碑已经有结果了，不再接受新的表态。'
-    case 'NOT_IN_CLAIM':
-      return '这份声明里没有你，只有被声明了比例的成员才需要表态。'
+    // 这两句逐字对应 #24 的要求：提交者与非确认人各有一句明确的话，而不是按钮悄悄消失
+    case 'SUBMITTER':
+      return '这条里程碑是你提交的，你不能确认自己的提交。它需要由项目里的其他成员独立确认。'
+    case 'NOT_REVIEWER':
+      return '你不是本里程碑确认人。确认人在提交时就已确定：提交者以外的全部项目成员。'
     case 'ALREADY_DECIDED':
       return `你已经在 ${formatDateTime(gate.value.decidedAt)} 表过态了，表态不能撤回。`
     default:
@@ -72,6 +80,24 @@ const gateReason = computed(() => {
 
 const deciding = ref('')       // 'CONFIRMED' | 'REJECTED' | ''：哪个按钮在转圈
 const decideError = ref(null)
+const downloading = ref(false)
+const downloadError = ref(null)
+
+/**
+ * 下载链下托管的原始文件。下载失败时把错误留在页面上，
+ * 而不是用 alert——同一个页面已经有 ErrorNotice 的模式，保持一致。
+ */
+async function download() {
+  downloading.value = true
+  downloadError.value = null
+  try {
+    await downloadMilestoneFile(route.params.id)
+  } catch (e) {
+    downloadError.value = e
+  } finally {
+    downloading.value = false
+  }
+}
 
 /**
  * 刚刚表完态时记下结果，用来给一条明确的成功反馈。
@@ -84,12 +110,16 @@ const decideError = ref(null)
  */
 const justDecided = ref('')
 
-/** 还没表态的人。表完态后告诉用户「接下来等谁」，比只说「成功」有用 */
+/**
+ * 还没表态的确认人。表完态后告诉用户「接下来等谁」，比只说「成功」有用。
+ * 名单取自 requiredConfirmerIds 快照，不是 contributors——提交者不在等待之列，
+ * 没分到比例的确认人却在（PR #28）。
+ */
 const waitingFor = computed(() => {
   const m = milestone.value
   if (!m) return []
-  const decided = new Set((m.confirmations ?? []).map((c) => c.memberId))
-  return (m.contributors ?? []).map((c) => c.memberId).filter((id) => !decided.has(id))
+  const decided = new Set(asObjectList(m.confirmations).map((c) => c.memberId))
+  return confirmers.value.filter((id) => !decided.has(id))
 })
 
 const successText = computed(() => {
@@ -99,7 +129,7 @@ const successText = computed(() => {
     return '已记录你的拒绝。这条声明作废，需要提交者修改后重新提交。'
   }
   if (status === 'VERIFIED') {
-    return '已记录你的确认。声明里的成员全部确认完毕，这条记录已经写入存证。'
+    return '已记录你的确认。所有确认人都已确认，这条记录已经写入存证。'
   }
   if (waitingFor.value.length) {
     return `已记录你的确认。还在等 ${waitingFor.value.join('、')} 表态。`
@@ -165,7 +195,9 @@ async function decide(decision) {
 
         <template #meta>
           <StatusBadge :status="milestone.status" />
-          <span class="t-nums">提交于 {{ formatDateTime(milestone.createdAt) }}</span>
+          <span class="t-nums">
+            {{ submitter ? `${submitter} 提交于` : '提交于' }} {{ formatDateTime(milestone.createdAt) }}
+          </span>
           <ConfirmProgress :milestone="milestone" />
         </template>
       </PageHeader>
@@ -202,12 +234,27 @@ async function decide(decision) {
           :expected="milestone.fileHash"
           label="你手上的那份成果文件"
         />
+
+        <!-- 下载按钮。放在 FileHashCheck 之后：先让用户知道自己要核对什么，
+             再给一个「把文件拿下来核对」的动作。下载失败时显示错误，
+             和页面其他地方的 ErrorNotice 保持一致。 -->
+        <div class="download-row">
+          <BaseButton
+            variant="secondary"
+            :loading="downloading"
+            loading-text="下载中…"
+            @click="download"
+          >
+            下载原始文件
+          </BaseButton>
+          <ErrorNotice v-if="downloadError" :error="downloadError" title="下载失败" />
+        </div>
       </BaseCard>
 
       <BaseCard padding="none" class="block">
         <template #title><h2>贡献声明</h2></template>
         <template #actions>
-          <span class="t-small t-soft">共 {{ milestone.contributors.length }} 人</span>
+          <span class="t-small t-soft t-nums">{{ confirmers.length }} 位确认人</span>
         </template>
         <div class="table-wrap">
           <ClaimTable :milestone="milestone" :highlight="me" />
@@ -234,12 +281,18 @@ async function decide(decision) {
         </p>
 
         <template v-if="gate.can">
+          <!-- 确认人不一定分到了比例：0% 的成员同样要表态，他核对的是别人的贡献是否属实 -->
           <p class="ask">
-            这份声明把 <strong class="t-nums">{{ gate.share }}%</strong>
-            记在你名下。
+            <template v-if="gate.share">
+              这份声明把 <strong class="t-nums">{{ gate.share }}%</strong>
+              记在你名下。
+            </template>
+            <template v-else>
+              这份声明没有给你分配比例。你作为提交者以外的成员，需要核对其他人的贡献是否属实。
+            </template>
           </p>
           <p class="t-small t-soft note">
-            全员确认后写入存证，一人拒绝则整条作废。<strong>表态不能撤回。</strong>
+            所有确认人都确认后写入存证，任何一人拒绝则整条作废。<strong>表态不能撤回。</strong>
           </p>
           <div class="actions">
             <BaseButton
@@ -265,7 +318,7 @@ async function decide(decision) {
 
         <!-- 刚表完态时不再重复「你已经表过态了」——上面那条成功反馈已经说清楚了。
              这句留给之后重新打开这一页的情况 -->
-        <p v-else-if="!justDecided" class="t-soft">{{ gateReason }}</p>
+        <p v-else-if="!justDecided" class="t-soft gate-reason">{{ gateReason }}</p>
       </BaseCard>
     </AsyncSection>
   </div>
@@ -285,6 +338,14 @@ async function decide(decision) {
 .block { margin-bottom: var(--sp-4); }
 
 .check-intro { margin-bottom: var(--sp-3); max-width: 68ch; }
+
+.download-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--sp-4);
+}
 
 .file { display: grid; grid-template-columns: 120px 1fr; gap: var(--sp-2) var(--sp-4); margin: 0 0 var(--sp-4); }
 .file dt { padding-top: var(--sp-1); }

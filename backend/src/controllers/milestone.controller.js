@@ -23,6 +23,11 @@ export async function createMilestone(req, res, next) {
   let committed = false
 
   try {
+    const submitterId = currentMemberId(req)
+    if (!submitterId) {
+      throw new ApplicationError(400, 'VALIDATION_ERROR', '请求头 X-Member-Id 为必填项。')
+    }
+
     const title = typeof req.body.title === 'string' ? req.body.title.trim() : ''
     if (!title) {
       throw new ApplicationError(400, 'VALIDATION_ERROR', '里程碑标题为必填项。')
@@ -46,7 +51,8 @@ export async function createMilestone(req, res, next) {
       typeof req.body.description === 'string' ? req.body.description : '',
       req.file.originalname || '',
       serverFileHash,
-      JSON.stringify(contributors)
+      JSON.stringify(contributors),
+      submitterId
     )
     committed = true
     res.status(201).json(publicMilestone(milestone))

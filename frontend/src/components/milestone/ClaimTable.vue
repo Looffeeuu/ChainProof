@@ -1,15 +1,22 @@
 <script setup>
 import { computed } from 'vue'
 import { asObjectList } from '../../utils/list.js'
+import { confirmersOf, submitterOf } from '../../utils/confirm-gate.js'
 import MemberAvatars from '../project/MemberAvatars.vue'
 import StatusBadge from '../base/StatusBadge.vue'
 import { formatDateTime } from '../../utils/format-time.js'
 
 /**
- * 贡献声明表：每位成员一行，显示他被声明的比例、以及他表态了没有。
+ * 贡献声明表：每位相关成员一行，显示他被声明的比例、以及他表态了没有。
  *
  * 「谁还没表态」是确认页上最需要一眼看清的东西，
  * 所以未表态不是留空，而是明写「等待中」——留空会被读成「没有数据」。
+ *
+ * **行不再只取 contributors（PR #28）。** 确认人是创建时的 `requiredConfirmerIds` 快照：
+ * 提交者以外的全部项目成员，包括没分到比例的人。只列 contributors 的话，
+ * 一个 0% 的确认人在表里根本不出现，而进度却在等他——「还差谁」就对不上了。
+ * 现在的顺序是：提交者在最上面，然后是确认人（快照本身已按字节序排好）。
+ * 万一有 contributor 既不是提交者也不在快照里（不该出现，但接口给了就照实列），排在最后。
  */
 const props = defineProps({
   milestone: { type: Object, required: true },
@@ -20,12 +27,25 @@ const props = defineProps({
 const decisionOf = (memberId) =>
   asObjectList(props.milestone.confirmations).find((c) => c.memberId === memberId)
 
-const rows = computed(() =>
-  asObjectList(props.milestone.contributors).map((c) => ({
-    ...c,
-    decision: decisionOf(c.memberId)
+const rows = computed(() => {
+  const contributors = asObjectList(props.milestone.contributors)
+  const shareOf = (memberId) => contributors.find((c) => c.memberId === memberId)?.percentage ?? 0
+
+  const submitter = submitterOf(props.milestone)
+  const confirmers = confirmersOf(props.milestone)
+  const ids = [
+    ...(submitter ? [submitter] : []),
+    ...confirmers,
+    ...contributors.map((c) => c.memberId)
+  ]
+
+  return [...new Set(ids)].map((memberId) => ({
+    memberId,
+    percentage: shareOf(memberId),
+    role: memberId === submitter ? 'SUBMITTER' : confirmers.includes(memberId) ? 'CONFIRMER' : 'OTHER',
+    decision: decisionOf(memberId)
   }))
-)
+})
 </script>
 
 <template>
@@ -48,9 +68,11 @@ const rows = computed(() =>
             <span v-if="row.memberId === highlight" class="t-small tag">你</span>
           </span>
         </td>
-        <td class="num t-nums pct">{{ row.percentage }}%</td>
+        <td class="num t-nums pct" :class="{ 't-soft': row.percentage === 0 }">{{ row.percentage }}%</td>
         <td>
           <StatusBadge v-if="row.decision" :status="row.decision.decision" />
+          <span v-else-if="row.role === 'SUBMITTER'" class="t-small t-soft">提交者，无需表态</span>
+          <span v-else-if="row.role === 'OTHER'" class="t-small t-soft">不在确认名单</span>
           <span v-else class="t-small t-soft">等待中</span>
         </td>
         <td class="t-small t-soft t-nums">

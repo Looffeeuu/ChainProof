@@ -15,6 +15,10 @@ export const getMilestone = (milestoneId) =>
 /**
  * 提交里程碑。真接口是 multipart/form-data（docs/API.md §3），
  * 所以这里把对象转成 FormData；假数据直接吃对象。
+ *
+ * 提交者（submitterId）真接口取自请求头 `X-Member-Id`，由 client.js 统一带上，
+ * **不进表单**——两处都写的话，一旦不一致就说不清以哪个为准。
+ * 假接口拿不到请求头，所以 payload 里显式带一个 submitterId 给它。
  */
 export const createMilestone = (projectId, payload) => {
   if (useMock('createMilestone')) return mock.createMilestone(projectId, payload)
@@ -44,3 +48,53 @@ export const confirmMilestone = (milestoneId, payload) =>
   useMock('confirmMilestone')
     ? mock.confirmMilestone(milestoneId, payload)
     : post(`/milestones/${milestoneId}/confirmations`, { decision: payload.decision })
+
+/**
+ * 下载里程碑的链下原始文件（docs/API.md §3）。
+ *
+ * 后端返回的是二进制流 + Content-Disposition，所以不能走 client.js 的 JSON 解析。
+ * 自己发 fetch，拿到 blob 后造一个临时 <a> 触发下载。
+ *
+ * 文件名取自后端根据链上 fileName 设的 Content-Disposition；
+ * 拿不到时后端会用 `${milestoneId}.bin`，浏览器从 Content-Disposition 取。
+ */
+export async function downloadMilestoneFile(milestoneId) {
+  if (useMock('downloadMilestoneFile')) {
+    return mock.downloadMilestoneFile(milestoneId)
+  }
+  const { session } = await import('../stores/session.js')
+  const headers = {}
+  if (session.currentMemberId) headers['X-Member-Id'] = session.currentMemberId
+
+  let res
+  try {
+    res = await fetch(`/api/milestones/${milestoneId}/file`, { headers })
+  } catch {
+    throw new Error('连不上服务器，请确认后端已经启动。')
+  }
+
+  if (!res.ok) {
+    let payload = null
+    try {
+      payload = await res.json()
+    } catch {
+      payload = null
+    }
+    const err = payload?.error ?? {}
+    throw new Error(err.message ?? `下载失败（HTTP ${res.status}）。`)
+  }
+
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)"?/i)
+  const fileName = match ? decodeURIComponent(match[1]) : `${milestoneId}.bin`
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}

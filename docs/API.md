@@ -135,6 +135,8 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 
 使用 `multipart/form-data`。
 
+请求必须携带 `X-Member-Id`。该值是本次里程碑的 `submitterId`，不从 body 读取。提交者必须属于项目；项目至少需要 2 名不同成员，才能形成独立确认关系。
+
 字段：
 
 - `title`
@@ -145,10 +147,12 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 
 流程：
 
-1. 后端对上传文件原始字节独立计算 SHA-256。
-2. 与 `clientFileHash` 比对。
-3. 不一致：HTTP 400 + `FILE_HASH_MISMATCH`。
-4. 一致：以后端计算值作为权威 `fileHash`，提交 Fabric，并将原始文件保留在链下。
+1. 后端要求并读取 `X-Member-Id`，作为 `submitterId` 提交 Fabric。
+2. 后端对上传文件原始字节独立计算 SHA-256。
+3. 与 `clientFileHash` 比对。
+4. 不一致：HTTP 400 + `FILE_HASH_MISMATCH`。
+5. 一致：以后端计算值作为权威 `fileHash`，提交 Fabric，并将原始文件保留在链下。
+6. Chaincode 保存 `requiredConfirmerIds` 快照：创建时项目全部成员中除 `submitterId` 外的人，按 UTF-8 无符号字节序升序排列。后续确认资格只读取这份快照。
 
 返回：新建后的完整 `Milestone`。
 
@@ -179,8 +183,10 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 成功返回：**更新后的完整 `Milestone`**，包括新的 `confirmations`、`status`、`txId`。
 
 状态规则：
-- 全部 contributor 确认 → `VERIFIED`
-- 任意 contributor 拒绝 → 立即 `REJECTED`
+- 提交者不能确认或拒绝自己提交的里程碑。
+- 只有 `requiredConfirmerIds` 中的成员可以表态；确认资格与该成员是否出现在 contributors 中无关。
+- 全部 required confirmer 确认 → `VERIFIED`
+- 任意 required confirmer 拒绝 → 立即 `REJECTED`
 - 同一成员不得重复表态
 - `VERIFIED` / `REJECTED` 后不得继续表态
 
@@ -307,6 +313,8 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 - `description: string`
 - `fileName: string`
 - `fileHash: string`（64 位小写 hex）
+- `submitterId: string`
+- `requiredConfirmerIds: string[]`（创建时除提交者外的项目成员快照，UTF-8 无符号字节序升序）
 - `contributors: {memberId, percentage}[]`
 - `confirmations: {memberId, decision, timestamp}[]`
 - `createdAt: ISO 8601 string`
@@ -351,7 +359,9 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 | `MILESTONE_NOT_FOUND` | 404 | 里程碑不存在 |
 | `CERTIFICATE_NOT_FOUND` | 404 | 非 verify 场景查询证书不存在 |
 | `CONTRIBUTION_TOTAL_INVALID` | 400 | 比例总和不是 100 |
-| `MEMBER_NOT_IN_CLAIM` | 403 | 当前成员不是 contributor |
+| `MEMBER_NOT_IN_CLAIM` | 403 | 当前成员不属于需要成员资格的业务对象（保留给既有接口） |
+| `SUBMITTER_CANNOT_CONFIRM` | 403 | 里程碑提交者尝试确认或拒绝自己的提交 |
+| `MEMBER_NOT_REVIEWER` | 403 | 当前成员不在该里程碑的 requiredConfirmerIds 快照中 |
 | `ALREADY_DECIDED` | 409 | 当前成员已经表态 |
 | `MILESTONE_CLOSED` | 409 | milestone 已 VERIFIED / REJECTED |
 | `FILE_HASH_MISMATCH` | 400 | 前后端文件哈希不一致 |

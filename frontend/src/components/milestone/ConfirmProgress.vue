@@ -1,13 +1,17 @@
 <script setup>
 import { computed } from 'vue'
 import { asObjectList } from '../../utils/list.js'
+import { confirmersOf } from '../../utils/confirm-gate.js'
 import { session } from '../../stores/session.js'
 
 /**
- * 确认进度：「2/3 已确认」。
+ * 确认进度：「1/2 已确认」。
  *
- * 一条里程碑要等声明里的每个人都表态。这个数字是 Timeline 上最能说明
- * 「还差什么」的一处信息，所以单独成组件——它在 Timeline、确认页各用一次。
+ * 一条里程碑要等每位确认人都表态。确认人是创建时保存的 `requiredConfirmerIds`
+ * 快照——提交者以外的全部项目成员，与 contributors 无关（PR #28）。
+ * 所以分母不是「声明里有几个人」，提交者自己不计入。
+ * 这个数字是 Timeline 上最能说明「还差什么」的一处信息，所以单独成组件——
+ * 它在 Timeline、确认页各用一次。
  *
  * 被拒绝的情况不显示分数，显示是**谁**拒绝的：分数会让人以为还在等其他人，
  * 而实际上流程已经停了。
@@ -20,10 +24,13 @@ const props = defineProps({
   milestone: { type: Object, required: true }
 })
 
-const total = computed(() => asObjectList(props.milestone.contributors).length)
+const confirmers = computed(() => confirmersOf(props.milestone))
+const total = computed(() => confirmers.value.length)
 
+// 只数确认人名单里的那几条：分子和分母要数的是同一批人
 const confirmed = computed(
-  () => asObjectList(props.milestone.confirmations).filter((c) => c.decision === 'CONFIRMED').length
+  () => asObjectList(props.milestone.confirmations)
+    .filter((c) => c.decision === 'CONFIRMED' && confirmers.value.includes(c.memberId)).length
 )
 
 const rejecters = computed(

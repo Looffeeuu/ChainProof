@@ -36,3 +36,8 @@ jobs:
         run: npm ci
       - name: Run backend tests
         run: npm test
+      - name: Check Demo script syntax
+        shell: bash
+        run: |
+          node --check scripts/demo-seed.mjs
+          bash -n scripts/demo-reset.sh

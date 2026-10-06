@@ -45,7 +45,7 @@ function assert(cond, message) {
 const FIELDS = {
   Project: ['projectId', 'name', 'description', 'ownerId', 'members', 'createdAt', 'status'],
   Milestone: ['milestoneId', 'projectId', 'title', 'description', 'fileName', 'fileHash',
-    'contributors', 'confirmations', 'createdAt', 'status', 'txId'],
+    'submitterId', 'requiredConfirmerIds', 'contributors', 'confirmations', 'createdAt', 'status', 'txId'],
   Certificate: ['certificateId', 'projectId', 'memberId', 'contributionPercentage',
     'milestoneIds', 'issuedAt', 'verificationStatus', 'txId']
 }
@@ -108,6 +108,25 @@ await check('每条里程碑的贡献比例都是整数且总和为 100', () => 
       assert(Number.isInteger(c.percentage), `${m.milestoneId} 的 ${c.memberId} 比例不是整数`))
     assert(sumPercentages(m.contributors) === 100, `${m.milestoneId} 比例总和不是 100`)
   })
+})
+
+// PR #28 的规则落在夹具上：夹具违反规则的话，页面在假数据下演示出来的就是旧规则
+await check('夹具里每条里程碑都符合独立确认规则', () => {
+  milestones.forEach((m) => {
+    const project = projects.find((p) => p.projectId === m.projectId)
+    const want = project.members.filter((id) => id !== m.submitterId).sort(compareUtf8)
+    assert(project.members.includes(m.submitterId), `${m.milestoneId} 的提交者 ${m.submitterId} 不是项目成员`)
+    assert(JSON.stringify(m.requiredConfirmerIds) === JSON.stringify(want),
+      `${m.milestoneId} 的确认人是 ${m.requiredConfirmerIds}，应为 ${want}`)
+    assert(m.confirmations.every((c) => m.requiredConfirmerIds.includes(c.memberId)),
+      `${m.milestoneId} 有不在确认人名单里的表态（提交者自己表态了？）`)
+    const decided = new Map(m.confirmations.map((c) => [c.memberId, c.decision]))
+    const all = m.requiredConfirmerIds.every((id) => decided.get(id) === 'CONFIRMED')
+    const anyRejected = m.confirmations.some((c) => c.decision === 'REJECTED')
+    const expected = anyRejected ? 'REJECTED' : all ? 'VERIFIED' : 'PENDING_CONFIRMATION'
+    assert(m.status === expected, `${m.milestoneId} 的状态是 ${m.status}，按表态应为 ${expected}`)
+  })
+  return `${milestones.length} 条`
 })
 
 await check('fileHash 都是 64 位十六进制', () => {
@@ -183,21 +202,109 @@ await check('同一个人不能重复表态', async () => {
   }
 })
 
-await check('不在声明里的人不能确认', async () => {
+// —— 独立成员确认（PR #28）——
+
+/** 期望一次调用失败，并返回那个错误；没失败就抛 */
+async function rejects(fn) {
   try {
-    await api.confirmMilestone('M002', { memberId: 'dave', decision: 'CONFIRMED' })
-    throw new Error('本该被拒绝')
+    await fn()
   } catch (e) {
-    assert(e.code === 'MEMBER_NOT_IN_CLAIM' || e.code === 'MILESTONE_CLOSED', `code 是 ${e.code}`)
-    return `${e.code} / ${e.message}`
+    return e
   }
+  throw new Error('本该被拒绝')
+}
+
+await check('提交里程碑必须带提交者：缺了回 400 VALIDATION_ERROR', async () => {
+  const e = await rejects(() => api.createMilestone('P001', {
+    title: '没有提交者', fileName: 'x.bin', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 100 }]
+  }))
+  assert(e.code === 'VALIDATION_ERROR' && e.status === 400, `得到 ${e.code} / ${e.status}`)
+  return e.message
+})
+
+await check('提交者不是项目成员时回 400 VALIDATION_ERROR', async () => {
+  // P003 只有 alice 和 charlie
+  const e = await rejects(() => api.createMilestone('P003', {
+    title: 'bob 不在这个项目', fileName: 'x.bin', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'bob'
+  }))
+  assert(e.code === 'VALIDATION_ERROR' && e.status === 400, `得到 ${e.code} / ${e.status}`)
+  return e.message
+})
+
+await check('新建时保存确认人快照：除提交者外的全部成员、按字节序，与 contributors 无关', async () => {
+  const m = await api.createMilestone('P001', {
+    title: '快照', fileName: 'x.bin', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'bob', percentage: 100 }], submitterId: 'bob'
+  })
+  sameFields(m, FIELDS.Milestone, '新建的里程碑')
+  assert(m.submitterId === 'bob', `submitterId 是 ${m.submitterId}`)
+  assert(JSON.stringify(m.requiredConfirmerIds) === '["alice","charlie"]',
+    `requiredConfirmerIds 是 ${JSON.stringify(m.requiredConfirmerIds)}`)
+  return `${m.submitterId} 提交 → ${m.requiredConfirmerIds.join('、')} 确认`
+})
+
+await check('提交者不能确认自己：403 SUBMITTER_CANNOT_CONFIRM，拒绝也一样', async () => {
+  const m = await api.createMilestone('P001', {
+    title: '自己 100%', fileName: 'x.bin', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
+  })
+  for (const decision of ['CONFIRMED', 'REJECTED']) {
+    const e = await rejects(() => api.confirmMilestone(m.milestoneId, { memberId: 'alice', decision }))
+    assert(e.code === 'SUBMITTER_CANNOT_CONFIRM' && e.status === 403, `${decision} 得到 ${e.code} / ${e.status}`)
+  }
+  const after = await api.getMilestone(m.milestoneId)
+  assert(after.status === 'PENDING_CONFIRMATION' && after.confirmations.length === 0, '被拒的表态被记进去了')
+  return 'CONFIRMED / REJECTED 都被拦下'
+})
+
+await check('不在确认人名单里的人不能表态：403 MEMBER_NOT_REVIEWER', async () => {
+  // 现建一条：M004 已经被前面的检查确认成 VERIFIED，在它上面只会得到 MILESTONE_CLOSED
+  const m = await api.createMilestone('P001', {
+    title: '非确认人', fileName: 'x.bin', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
+  })
+  const e = await rejects(() => api.confirmMilestone(m.milestoneId, { memberId: 'dave', decision: 'CONFIRMED' }))
+  assert(e.code === 'MEMBER_NOT_REVIEWER' && e.status === 403, `得到 ${e.code} / ${e.status}`)
+  return e.message
+})
+
+await check('没分到比例的确认人也必须确认，全部确认人确认后才 VERIFIED', async () => {
+  // contributors 里只有 alice 和 bob；charlie 0%，但他是确认人
+  const m = await api.createMilestone('P001', {
+    title: 'charlie 没分到比例', fileName: 'x.bin', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 50 }, { memberId: 'bob', percentage: 50 }],
+    submitterId: 'bob'
+  })
+  const one = await api.confirmMilestone(m.milestoneId, { memberId: 'alice', decision: 'CONFIRMED' })
+  assert(one.status === 'PENDING_CONFIRMATION', `alice 确认后就是 ${one.status}，charlie 还没确认`)
+  const two = await api.confirmMilestone(m.milestoneId, { memberId: 'charlie', decision: 'CONFIRMED' })
+  assert(two.status === 'VERIFIED', `charlie 确认后是 ${two.status}`)
+  return `${one.status} → ${two.status}`
+})
+
+await check('任一确认人拒绝即 REJECTED，之后再表态回 409 MILESTONE_CLOSED', async () => {
+  const m = await api.createMilestone('P001', {
+    title: '会被拒', fileName: 'x.bin', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
+  })
+  const r = await api.confirmMilestone(m.milestoneId, { memberId: 'charlie', decision: 'REJECTED' })
+  assert(r.status === 'REJECTED', `拒绝后是 ${r.status}`)
+  const e = await rejects(() => api.confirmMilestone(m.milestoneId, { memberId: 'bob', decision: 'CONFIRMED' }))
+  assert(e.code === 'MILESTONE_CLOSED' && e.status === 409, `得到 ${e.code} / ${e.status}`)
+  // 关闭优先于其它判定：提交者对一条已关闭的里程碑表态，说的是「已关闭」
+  const e2 = await rejects(() => api.confirmMilestone(m.milestoneId, { memberId: 'alice', decision: 'CONFIRMED' }))
+  assert(e2.code === 'MILESTONE_CLOSED', `提交者对已关闭的里程碑表态得到 ${e2.code}`)
+  return `${r.status}；之后 ${e.code}`
 })
 
 await check('比例总和不是 100 时提交被拒，且错误信息说清当前是多少', async () => {
   try {
     await api.createMilestone('P001', {
       title: 't',
-      contributors: [{ memberId: 'alice', percentage: 97 }]
+      contributors: [{ memberId: 'alice', percentage: 97 }],
+      submitterId: 'alice'
     })
     throw new Error('本该被拒绝')
   } catch (e) {
@@ -293,11 +400,13 @@ await check('确认导致状态变化后，txId 会换成新的那笔交易', as
 
   const target = await api.createMilestone('P001', {
     title: '自检用·txId 更新', description: '', fileName: 'x.zip', fileHash: 'a'.repeat(64),
-    contributors: [{ memberId: 'alice', percentage: 100 }]
+    contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
   })
   const created = target.txId
+  // alice 提交，确认人是 bob 和 charlie：两人都确认之后才进入 VERIFIED
+  await api.confirmMilestone(target.milestoneId, { memberId: 'bob', decision: 'CONFIRMED' })
   const after = await api.confirmMilestone(target.milestoneId, {
-    memberId: 'alice', decision: 'CONFIRMED'
+    memberId: 'charlie', decision: 'CONFIRMED'
   })
   assert(after.status === 'VERIFIED', `确认后状态是 ${after.status}`)
   assert(after.txId !== created, 'txId 没变——它应当指向最近一次让状态改变的交易')
@@ -365,17 +474,25 @@ await check('largestRemainder 无论输入怎么分，和恒等于 100', () => {
   return `${cases.length} 组输入都合规`
 })
 
-await check('confirmGate 四种情况各给一个原因码', () => {
+await check('confirmGate 五种情况各给一个原因码', () => {
   // 直接用 fixtures 里的原始数据，不经过假接口——
   // 假接口的 db 是可写的，前面的检查已经改过 M004 的状态
-  const pending = milestones.find((m) => m.milestoneId === 'M004')  // 待确认，alice/bob 已表态
+  const pending = milestones.find((m) => m.milestoneId === 'M004')  // 待确认：alice 提交，bob 已确认，charlie 未表态
   const rejected = milestones.find((m) => m.milestoneId === 'M003') // 已拒绝
   const verified = milestones.find((m) => m.milestoneId === 'M002') // 已验证
 
+  // 确认人没分到比例：contributors 里没有 charlie，但他在快照里
+  const zeroShare = {
+    ...pending,
+    contributors: [{ memberId: 'alice', percentage: 60 }, { memberId: 'bob', percentage: 40 }]
+  }
+
   const cases = [
-    [pending, 'charlie', true, '', '在名单里、还没表态 → 可以表态'],
-    [pending, 'alice', false, 'ALREADY_DECIDED', '已经表过态'],
-    [pending, 'dave', false, 'NOT_IN_CLAIM', '不在这份声明里'],
+    [pending, 'charlie', true, '', '在确认人名单里、还没表态 → 可以表态'],
+    [pending, 'bob', false, 'ALREADY_DECIDED', '已经表过态'],
+    [pending, 'alice', false, 'SUBMITTER', '提交者不能确认自己'],
+    [pending, 'dave', false, 'NOT_REVIEWER', '不在确认人名单里'],
+    [zeroShare, 'charlie', true, '', '0% 的确认人照样可以表态'],
     [rejected, 'charlie', false, 'CLOSED', '整条已被拒绝'],
     [verified, 'alice', false, 'CLOSED', '整条已验证'],
     [null, 'alice', false, 'NO_DATA', '还没有数据']
@@ -388,9 +505,16 @@ await check('confirmGate 四种情况各给一个原因码', () => {
   })
 
   // 已表态时要能拿到时间，页面才说得出「你已经在 X 表过态了」
-  assert(confirmGate(pending, 'alice').decidedAt, 'ALREADY_DECIDED 没有带上表态时间')
-  // 优先级：整条已关闭时，即使这个人不在名单里，也先说「已经有结果了」
-  assert(confirmGate(rejected, 'dave').reason === 'CLOSED', '原因码的优先级不对')
+  assert(confirmGate(pending, 'bob').decidedAt, 'ALREADY_DECIDED 没有带上表态时间')
+  // 0% 的确认人没有 share，页面据此换一句话，而不是显示「0% 记在你名下」
+  assert(confirmGate(zeroShare, 'charlie').share === null, '0% 确认人的 share 应当是 null')
+  // 优先级：整条已关闭时，提交者和不在名单里的人都先听到「已经有结果了」
+  assert(confirmGate(rejected, 'dave').reason === 'CLOSED', '原因码的优先级不对（非确认人）')
+  assert(confirmGate(rejected, 'alice').reason === 'CLOSED', '原因码的优先级不对（提交者）')
+  // 快照缺失时谁都不能表态——不许退回「contributors 确认」的旧规则
+  const noSnapshot = { ...pending, requiredConfirmerIds: undefined }
+  assert(['alice', 'bob', 'charlie'].every((who) => !confirmGate(noSnapshot, who).can),
+    '没有确认人快照时有人能表态，等于退回了旧规则')
   return `${cases.length} 种情况都对`
 })
 
@@ -579,7 +703,7 @@ await check('提交里程碑时，前端算出的哈希会被带进新建的里�
   const hash = sha256Bytes(new TextEncoder().encode('假装这是一个成果文件'))
   const created = await api.createMilestone('P001', {
     title: '自检用', description: '', fileName: 'demo.zip', fileHash: hash,
-    contributors: [{ memberId: 'alice', percentage: 100 }]
+    contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
   })
   assert(created.fileHash === hash,
     `新建的里程碑 fileHash 是 ${JSON.stringify(created.fileHash)}，应为前端算出的那个`)
@@ -840,12 +964,13 @@ await check('compareUtf8 按 UTF-8 字节比，和 JS 的 < 在 BMP 外字符上
 })
 
 await check('0% 成员：面板里有他，签发被 409 拒绝；参与者的证书只列自己参与的', async () => {
-  // P003 成员是 alice 与 charlie。提交一条只有 alice 的里程碑并确认，charlie 就是 0%
+  // P003 成员是 alice 与 charlie。alice 提交一条只有她自己的里程碑，charlie 就是 0%；
+  // charlie 虽然 0%，仍是唯一的确认人，由他确认（PR #28）
   const m = await api.createMilestone('P003', {
     title: '只有 alice 的成果', fileName: 'a.txt', fileHash: '0'.repeat(64),
-    contributors: [{ memberId: 'alice', percentage: 100 }]
+    contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
   })
-  const done = await api.confirmMilestone(m.milestoneId, { memberId: 'alice', decision: 'CONFIRMED' })
+  const done = await api.confirmMilestone(m.milestoneId, { memberId: 'charlie', decision: 'CONFIRMED' })
   assert(done.status === 'VERIFIED', `确认后是 ${done.status}`)
 
   const r = await api.getContributions('P003')
@@ -901,7 +1026,8 @@ await check('假接口对超限文件回 413 + FILE_TOO_LARGE', async () => {
     await api.createMilestone('P001', {
       title: '超限', fileName: 'huge.bin', fileHash: '0'.repeat(64),
       file: { size: MAX_FILE_BYTES + 1 },
-      contributors: [{ memberId: 'alice', percentage: 100 }]
+      contributors: [{ memberId: 'alice', percentage: 100 }],
+      submitterId: 'alice'
     })
   } catch (e) {
     err = e
@@ -909,6 +1035,18 @@ await check('假接口对超限文件回 413 + FILE_TOO_LARGE', async () => {
   assert(err, '超限文件被收下了')
   assert(err.code === 'FILE_TOO_LARGE' && err.status === 413, `得到 ${err.code} / ${err.status}`)
   return err.message
+})
+
+// 这一条会往假接口的 db 里多建一个项目，所以放在所有数项目个数的检查之后
+await check('单成员项目不能提交里程碑：400，且说清至少要两名成员', async () => {
+  const solo = await api.createProject({ name: '单人项目', description: '', ownerId: 'alice', members: ['alice'] })
+  const e = await rejects(() => api.createMilestone(solo.projectId, {
+    title: '自己给自己确认', fileName: 'x.bin', fileHash: 'a'.repeat(64),
+    contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
+  }))
+  assert(e.code === 'VALIDATION_ERROR' && e.status === 400, `得到 ${e.code} / ${e.status}`)
+  assert(e.message.includes('两名成员'), `message 是「${e.message}」`)
+  return e.message
 })
 
 // —— 逐接口切换（api/mode.js）——

@@ -1,0 +1,16 @@
+ChainProof Demo - Defense Presentation Script
+==============================================
+
+Draft script for final project defense.
+
+Outline:
+1. Project background and motivation (2 min)
+2. System architecture demo (3 min)
+3. Live demonstration of milestone submission (3 min)
+4. Contribution verification walkthrough (2 min)
+5. Q&A (5 min)
+
+Speaker notes:
+- Emphasize the immutability guarantee from Fabric
+- Show the SHA-256 hash verification process
+- Demonstrate the independent confirmation workflow

@@ -6,6 +6,8 @@ import AwaitingYou from './AwaitingYou.vue'
 import { computed } from 'vue'
 import { formatDateTime } from '../../utils/format-time.js'
 import { asObjectList } from '../../utils/list.js'
+import { downloadMilestoneFile } from '../../api/milestones.js'
+import { ref } from 'vue'
 
 /**
  * 里程碑时间线。spec/01 §2.7 把它列为重点页面：
@@ -27,6 +29,22 @@ const TONE = {
   VERIFIED: 'verified',
   PENDING_CONFIRMATION: 'pending',
   REJECTED: 'rejected'
+}
+
+/**
+ * 下载里程碑文件。下载失败时只打 console，不弹 alert——
+ * 时间线是只读展示，不该被一个下载失败打断浏览。
+ */
+const downloadingId = ref('')
+async function download(milestoneId) {
+  downloadingId.value = milestoneId
+  try {
+    await downloadMilestoneFile(milestoneId)
+  } catch (e) {
+    console.error('下载失败:', e)
+  } finally {
+    downloadingId.value = ''
+  }
 }
 </script>
 
@@ -53,6 +71,14 @@ const TONE = {
           <HashText :value="m.fileHash" :label="`${m.title} 的文件哈希`" />
           <span class="t-small t-soft t-nums">{{ formatDateTime(m.createdAt) }}</span>
           <ConfirmProgress :milestone="m" />
+          <button
+            type="button"
+            class="t-small download-link"
+            :disabled="downloadingId === m.milestoneId"
+            @click.stop="download(m.milestoneId)"
+          >
+            {{ downloadingId === m.milestoneId ? '下载中…' : '下载文件' }}
+          </button>
           <RouterLink :to="`/milestones/${m.milestoneId}`" class="t-small more">查看声明</RouterLink>
         </div>
 
@@ -141,6 +167,19 @@ const TONE = {
 }
 
 .more { color: var(--c-primary-text); font-weight: 600; }
+
+.download-link {
+  color: var(--c-primary-text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.download-link:hover:not(:disabled) { opacity: 0.8; }
+.download-link:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* 链上交易独占一条：它和上面那行的文件哈希是两个不同的东西
    （一个是内容的指纹，一个是这次上链的凭据），并排放会被当成同一类 */

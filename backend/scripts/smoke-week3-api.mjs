@@ -52,10 +52,10 @@ async function createVerifiedMilestone(title, contributors) {
   }), 201)
 
   let current = milestone
-  for (const contributor of contributors) {
+  for (const reviewerId of milestone.requiredConfirmerIds) {
     current = await json(
       `milestones/${milestone.milestoneId}/confirmations`,
-      as(contributor.memberId, postJson({ decision: 'CONFIRMED' }))
+      as(reviewerId, postJson({ decision: 'CONFIRMED' }))
     )
   }
   if (current.status !== 'VERIFIED') {

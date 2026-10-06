@@ -18,6 +18,8 @@ import { hashFile } from '../utils/sha256.js'
 import { MAX_FILE_LABEL, formatBytes, isTooLarge } from '../utils/file-limit.js'
 import { focusFirstInvalid } from '../composables/useInvalidFocus.js'
 import { setFlash } from '../stores/flash.js'
+import { session } from '../stores/session.js'
+import { compareUtf8 } from '../utils/percentage.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -119,6 +121,34 @@ watch(project, (p) => {
 
 const total = computed(() => sumPercentages(contributors.value))
 
+/**
+ * 提交之后由谁确认（PR #28）：项目里除提交者（当前身份）以外的全部成员，
+ * 与比例怎么分无关。提交前就把名单摆出来——0% 的成员同样要确认，
+ * 这一点不说的话，用户会以为「没分比例的人不用管」。
+ * 排序与链码的快照一致（UTF-8 字节序），提交后确认页上看到的是同一个顺序。
+ */
+const me = computed(() => session.currentMemberId)
+const members = computed(() => [...new Set(project.value?.members ?? [])])
+const confirmers = computed(() =>
+  members.value.filter((id) => id !== me.value).sort(compareUtf8)
+)
+
+/**
+ * 这个项目此刻能不能由当前身份提交里程碑。不能的话，表单填得再对也提交不了，
+ * 所以单独成一条，在表单最上面说清楚，而不是等后端回一个 400。
+ * 两条规则都照后端与链码（docs/API.md §3）。
+ */
+const projectBlock = computed(() => {
+  if (!project.value) return ''
+  if (!members.value.includes(me.value)) {
+    return `你（${me.value}）不是这个项目的成员，不能以你的身份提交里程碑。请切换到项目成员再提交。`
+  }
+  if (members.value.length < 2) {
+    return '这个项目只有 1 名成员。里程碑需要由提交者以外的成员独立确认，项目至少要有 2 名成员才能提交。'
+  }
+  return ''
+})
+
 /** 读取失败的说法只写一处，模板里复用它 */
 const FILE_UNREADABLE = '这个文件没能读取，换一个再试。'
 
@@ -153,11 +183,14 @@ const errors = computed(() => ({
  * 走 errors 会让输入框变红并带上 aria-invalid，读屏听到的是「这个字段填错了」。
  * 它只并进 valid，理由由下面的 blockedReason 说出来。
  */
-const valid = computed(() => !hashing.value && Object.values(errors.value).every((e) => !e))
+const valid = computed(() =>
+  !projectBlock.value && !hashing.value && Object.values(errors.value).every((e) => !e)
+)
 
 /** 按钮旁边那句「为什么现在不能提交」。第一条没满足的规则就是原因 */
 const blockedReason = computed(
   () =>
+    projectBlock.value ||
     Object.values(errors.value).find((e) => e) ||
     (hashing.value ? '正在计算文件哈希，算完就能提交。' : '')
 )
@@ -265,9 +298,11 @@ async function submit() {
       // 浏览器这边算出来的那份。真接口会把它作为 clientFileHash 发出去，
       // 由后端与自己算的比对（docs/API.md §3）
       fileHash: fileHash.value,
-      // 比例为 0 的成员不进声明：他没有参与这次成果，
-      // 让他去确认一份「你贡献了 0%」的声明没有意义
-      contributors: contributors.value.filter((c) => c.percentage > 0)
+      // 比例为 0 的成员不进 contributors：他没有参与这次成果。
+      // 但他**仍是确认人**——确认名单由后端按项目成员生成，与这里怎么分无关（PR #28）
+      contributors: contributors.value.filter((c) => c.percentage > 0),
+      // 只有假接口用得上；真接口靠请求头 X-Member-Id 认提交者（api/milestones.js）
+      submitterId: me.value
     })
     submitted.value = true
     setFlash(`「${created.title}」已提交，等待成员确认。`)
@@ -305,6 +340,10 @@ async function submit() {
       @retry="run(route.params.id)"
     >
       <form ref="formEl" class="layout" novalidate @submit.prevent="submit">
+        <!-- 整个项目层面的拦截（不是成员、成员不足两人）。放在最上面：
+             这种情况下下面的表单填了也是白填 -->
+        <p v-if="projectBlock" class="blocked" role="alert">{{ projectBlock }}</p>
+
         <BaseCard>
           <template #title><h2>成果</h2></template>
 
@@ -388,7 +427,7 @@ async function submit() {
           <p class="t-small t-soft intro">
             总和必须正好是 100%。
             <HelpTip title="比例为 0 的成员">
-              不会进入这份声明，也不需要他确认。
+              不会写进比例声明，但仍然要确认：确认人是除你以外的全部项目成员，与比例怎么分无关。
             </HelpTip>
           </p>
 
@@ -396,6 +435,11 @@ async function submit() {
                否则「只有比例不对」这一种情况下，上面那个按 aria-invalid 找元素的
                逻辑什么也找不到，表现仍然是「点了没反应」 -->
           <ContributionAllocator v-model="contributors" :invalid="Boolean(errors.contributors)" />
+
+          <!-- 提交之后谁来确认。你自己不在其中：提交者不能确认自己的提交 -->
+          <p v-if="!projectBlock" class="t-small t-soft confirmers">
+            提交后由 <strong class="who">{{ confirmers.join('、') }}</strong> 确认，你作为提交者不参与确认。
+          </p>
         </BaseCard>
 
         <ErrorNotice v-if="submitError" :error="submitError" title="里程碑没能提交" />
@@ -431,6 +475,16 @@ async function submit() {
 .fields { display: grid; gap: var(--sp-5); }
 .count { text-align: right; }
 .intro { margin-bottom: var(--sp-4); max-width: 60ch; }
+.confirmers { margin-top: var(--sp-4); max-width: 60ch; }
+.confirmers .who { color: var(--c-text); font-weight: 600; }
+
+.blocked {
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid currentColor;
+  border-radius: var(--r-sm);
+  color: var(--c-rejected);
+  background: var(--c-rejected-bg);
+}
 
 .picked {
   display: grid;

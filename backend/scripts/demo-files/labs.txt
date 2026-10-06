@@ -1,0 +1,15 @@
+ChainProof Demo - Course Lab Reports
+=====================================
+
+Labs 1-4 archive for course demonstration.
+
+Contents:
+- lab1/ Introduction to Python basics
+- lab2/ Data structures and algorithms
+- lab3/ Object-oriented programming
+- lab4/ File I/O and error handling
+
+Each lab contains:
+- Problem statement (README.md)
+- Solution code (*.py)
+- Test results (output.txt)

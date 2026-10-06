@@ -114,7 +114,11 @@ cmd_setup() {
   cmd_install_samples
   info "[1/4] 启动网络"
   run_step network-control.sh up
-  info "[2/4] 部署链码 ${CC_NAME}"
+  # Fabric 新通道的首个链码定义必须从 sequence 1 开始。
+  # config.env 的默认 sequence 2 用于升级既有 1.0 定义；setup 面向全新网络，
+  # 因此这里显式改为 1。SETUP_CC_SEQUENCE 仅供特殊复现场景覆盖。
+  export CC_SEQUENCE="${SETUP_CC_SEQUENCE:-1}"
+  info "[2/4] 部署链码 ${CC_NAME}（version=${CC_VERSION}, sequence=${CC_SEQUENCE}）"
   run_step deploy-chaincode.sh
   info "[3/4] 冒烟测试"
   run_step smoke-test.sh

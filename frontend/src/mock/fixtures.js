@@ -9,6 +9,12 @@
  * - Certificate 的 `verificationStatus` 取值是 `VALID` / `NOT_FOUND`，
  *   **不是 `VERIFIED`**——后者是 Milestone.status 的取值，两者同形不同义。
  *
+ * 2026-10-01 按 PR #28（独立成员确认）对齐：
+ * - Milestone 多了 `submitterId` 与 `requiredConfirmerIds`。确认人是创建时
+ *   「项目全部成员去掉提交者」的快照，按字节序排列；**提交者不表态**，
+ *   所以下面每条的 confirmations 里都没有提交者本人。
+ * - 进度的分母是确认人数，不是 contributors 人数：M004 显示「1/2 已确认」。
+ *
  * 内容沿用最初那份静态样张（已删除）的设定，这样页面做出来
  * 和样张能直接对照。三个项目分别覆盖三种情况：有待确认的、全部已验证的、一条里程碑都没有的。
  */
@@ -56,13 +62,14 @@ export const milestones = [
     description: '新增 60 条对抗样本；评测脚本改为按场景分组输出。等待 charlie 确认。',
     fileName: 'benchmark-v0.3.zip',
     fileHash: '9f2c4b7a58e13d0c6b91af4e27350d8ac6f1e94b03d7528aef6c1b496f970a4b',
+    submitterId: 'alice',
+    requiredConfirmerIds: ['bob', 'charlie'],
     contributors: [
       { memberId: 'alice', percentage: 50 },
       { memberId: 'bob', percentage: 30 },
       { memberId: 'charlie', percentage: 20 }
     ],
     confirmations: [
-      { memberId: 'alice', decision: 'CONFIRMED', timestamp: '2026-09-09T06:25:00.000Z' },
       { memberId: 'bob', decision: 'CONFIRMED', timestamp: '2026-09-09T08:41:00.000Z' }
     ],
     createdAt: '2026-09-09T06:22:00.000Z',
@@ -76,6 +83,8 @@ export const milestones = [
     description: 'bob 拒绝：指标权重与分工记录不一致，比例需要重新分配后再提交。',
     fileName: 'metrics-draft.pdf',
     fileHash: '3c81df20a74b6e5c19d0f8a37b2e64c95d18af07e3b6c24019d75a8e94ab7e03',
+    submitterId: 'alice',
+    requiredConfirmerIds: ['bob', 'charlie'],
     contributors: [
       { memberId: 'alice', percentage: 60 },
       { memberId: 'bob', percentage: 20 },
@@ -95,6 +104,8 @@ export const milestones = [
     description: '标注规范 v1.0，200 条样本双人交叉标注，一致率 0.91。',
     fileName: 'annotation-v1.0.zip',
     fileHash: '84a8d6e4b1c2f30945ac77e0d3915bb27f4e6a18cd90b2e1a3746cf074cbcccf',
+    submitterId: 'bob',
+    requiredConfirmerIds: ['alice', 'charlie'],
     contributors: [
       { memberId: 'alice', percentage: 40 },
       { memberId: 'bob', percentage: 35 },
@@ -102,7 +113,6 @@ export const milestones = [
     ],
     confirmations: [
       { memberId: 'alice', decision: 'CONFIRMED', timestamp: '2026-09-05T02:20:00.000Z' },
-      { memberId: 'bob', decision: 'CONFIRMED', timestamp: '2026-09-05T03:02:00.000Z' },
       { memberId: 'charlie', decision: 'CONFIRMED', timestamp: '2026-09-05T05:47:00.000Z' }
     ],
     createdAt: '2026-09-05T02:08:00.000Z',
@@ -116,13 +126,14 @@ export const milestones = [
     description: '确定选题、评测范围与三人分工，附课程选题表。',
     fileName: 'proposal.pdf',
     fileHash: '1d7e40b9c85a2f316d09be74a1c3820f5e6d94b7a08c1f52e397d6b4f27308ce',
+    submitterId: 'alice',
+    requiredConfirmerIds: ['bob', 'charlie'],
     contributors: [
       { memberId: 'alice', percentage: 48 },
       { memberId: 'bob', percentage: 26 },
       { memberId: 'charlie', percentage: 26 }
     ],
     confirmations: [
-      { memberId: 'alice', decision: 'CONFIRMED', timestamp: '2026-09-01T13:45:00.000Z' },
       { memberId: 'bob', decision: 'CONFIRMED', timestamp: '2026-09-01T14:02:00.000Z' },
       { memberId: 'charlie', decision: 'CONFIRMED', timestamp: '2026-09-02T01:19:00.000Z' }
     ],
@@ -137,6 +148,8 @@ export const milestones = [
     description: '四次实验的报告、代码与运行结果，打包存证。',
     fileName: 'labs-1-4.zip',
     fileHash: 'b7419ce0d2385a6f14bc90e73d5a812f6094ce3b7d81a250f6934cb87e10d9a2',
+    submitterId: 'bob',
+    requiredConfirmerIds: ['alice', 'charlie'],
     contributors: [
       { memberId: 'alice', percentage: 34 },
       { memberId: 'bob', percentage: 33 },
@@ -144,7 +157,6 @@ export const milestones = [
     ],
     confirmations: [
       { memberId: 'alice', decision: 'CONFIRMED', timestamp: '2026-08-21T01:00:00.000Z' },
-      { memberId: 'bob', decision: 'CONFIRMED', timestamp: '2026-08-21T02:30:00.000Z' },
       { memberId: 'charlie', decision: 'CONFIRMED', timestamp: '2026-08-21T09:12:00.000Z' }
     ],
     createdAt: '2026-08-21T00:40:00.000Z',
