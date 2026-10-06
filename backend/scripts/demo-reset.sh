@@ -172,8 +172,8 @@ cat <<'EOF'
 ║  前端入口：                                                      ║
 ║    Dashboard    →  http://localhost:5173/                        ║
 ║    项目详情     →  http://localhost:5173/projects/P001           ║
-║    里程碑确认   →  http://localhost:5173/projects/P001/          ║
-║                    milestones/M004  （PENDING 状态）              ║
+║    里程碑确认   →  http://localhost:5173/milestones/M004         ║
+║                    （PENDING 状态）                               ║
 ║    公开验证     →  http://localhost:5173/verify/                 ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
