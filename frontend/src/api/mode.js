@@ -25,6 +25,7 @@ export const API_NAMES = [
   'listMilestones',
   'createMilestone',
   'getMilestone',
+  'downloadMilestoneFile',
   'confirmMilestone',
   'getContributions',
   'listCertificates',
@@ -61,7 +62,7 @@ export function useMock(name) {
 }
 
 /**
- * 这个接口**切到真后端了没有**。`useMock` 的另一面，读起来顺一点。
+ * 这个接口**切到真后端了没有**。useMock 的另一面，读起来顺一点。
  *
  * 混合模式下要靠它判断「附属数据是不是还没接入」：主数据已经是链上的了，
  * 而附属接口还走假数据时，假数据的回答**不是事实**——哪怕它返回了一个空数组。
