@@ -141,7 +141,7 @@ cat <<'EOF'
 ║                                                                  ║
 ║  已写入数据：                                                    ║
 ║    - 3 个项目（P001 / P002 / P003）                              ║
-║    - 5 个里程碑（VERIFIED × 3 / REJECTED × 1 / PENDING × 1）    ║
+║    - 6 个里程碑（VERIFIED × 4 / REJECTED × 1 / PENDING × 1）    ║
 ║    - 2 张贡献证书                                                ║
 ║                                                                  ║
 ║  前端入口：                                                      ║
