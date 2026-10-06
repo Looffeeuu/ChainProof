@@ -13,7 +13,7 @@ ChainProof 使用官方 Hyperledger Fabric `test-network` 作为本地开发网�
 
 | 内容 | 验证方式 | 状态 |
 |---|---|---|
-| 链码合约逻辑 | 107 个单元测试，覆盖率 语句 95.8% / 分支 86.4% | ✅ 已实测通过 |
+| 链码合约逻辑 | 128 个单元测试（4 个套件） | ✅ 已实测通过 |
 | 测试替身与真实 `fabric-shim` 的一致性 | 逐字节对比（复合键、范围查询边界、键校验），已设为 `npm test` 门禁 | ✅ 已实测通过 |
 | `config.env` 中固定的版本号与下载地址 | 在目标 Ubuntu 20.04 环境实测：v2.5.16 / CA v1.5.17 二进制地址均返回 HTTP 200 | ✅ 已实测通过 |
 | `fabric-samples` 仓库 tag 情况 | 实测确认不存在 `v2.5.x` tag（最新 `v2.4.9`），故改用 `main` 并记录 commit | ✅ 已实测通过 |
@@ -106,6 +106,13 @@ Fabric test-network 需要 **Linux 容器环境**。三种可行方式：
 | 通道名 | `chainproof` |
 | 链码名 | `chainproof` |
 | 状态数据库 | `leveldb` |
+| Chaincode 应用版本 | `1.1` |
+
+首次执行 `setup` 时，脚本会在全新通道上使用 lifecycle sequence 1。已有
+`chainproof 1.0 / sequence 1` 的开发网络执行 `deploy` 时，默认升级为
+`1.1 / sequence 2`。如需复现其它生命周期阶段，可显式设置
+`CC_VERSION` / `CC_SEQUENCE`；`setup` 的首次 sequence 可用
+`SETUP_CC_SEQUENCE` 覆盖。
 
 ### 关于 fabric-samples 的版本（容易踩坑）
 
@@ -321,7 +328,7 @@ Windows + WSL2 环境下有两个高频坑，脚本已自动规避：
 `smoke` 在真实链上逐项断言：
 
 **正向链路**
-`CreateProject` → `GetProject` → `CreateMilestone` → 三人 `ConfirmContribution` → `VERIFIED`
+`CreateProject` → `GetProject` → `CreateMilestone` → 提交者以外成员独立 `ConfirmContribution` → `VERIFIED`
 → `GetProjectMilestones` → `GetProjectContributions` → `GetProjectHistory`
 → `IssueCertificate` → `GetCertificate` → `VerifyCertificate` = `VALID`
 
@@ -334,8 +341,9 @@ Windows + WSL2 环境下有两个高频坑，脚本已自动规避：
 | 贡献比例总和 97% | `CONTRIBUTION_TOTAL_INVALID` |
 | `fileHash` 不是 64 位小写 hex | `VALIDATION_ERROR` |
 | 贡献者不是项目成员 | `VALIDATION_ERROR` |
-| 非贡献者表态 | `MEMBER_NOT_IN_CLAIM` |
-| 同一成员改票 | `ALREADY_DECIDED` |
+| 提交者确认自己的提交 | `SUBMITTER_CANNOT_CONFIRM` |
+| 非确认人表态 | `MEMBER_NOT_REVIEWER` |
+| 同一确认人改票 | `ALREADY_DECIDED` |
 | `VERIFIED` 后继续表态 | `MILESTONE_CLOSED` |
 | 单人拒绝即 `REJECTED`，他人再表态 | `MILESTONE_CLOSED` |
 | 非法 `decision`（如 `MAYBE`） | `VALIDATION_ERROR` |
