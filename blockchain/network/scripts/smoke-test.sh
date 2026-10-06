@@ -3,11 +3,11 @@
 # ChainProof 链码冒烟测试（Issue #1 + Issue #2 验收）
 #
 # 在真实 Fabric 通道上跑完整业务链路，逐项断言：
-#   CreateProject → GetProject → CreateMilestone → 三人 ConfirmContribution
+#   CreateProject → GetProject → CreateMilestone → 提交者以外成员 ConfirmContribution
 #   → VERIFIED → GetProjectMilestones → GetProjectContributions
 #   → IssueCertificate → VerifyCertificate
-# 并验证状态机的三条负向规则：
-#   ALREADY_DECIDED / MILESTONE_CLOSED / MEMBER_NOT_IN_CLAIM
+# 并验证独立确认状态机的负向规则：
+#   SUBMITTER_CANNOT_CONFIRM / MEMBER_NOT_REVIEWER / ALREADY_DECIDED / MILESTONE_CLOSED
 #
 # 为什么需要这个脚本而不只靠单元测试：
 #   单元测试用的是 mock stub。mock 与真实 peer 在复合键、范围查询、
@@ -147,8 +147,9 @@ CERT_ID="CP-${RUN_ID}"
 # 合法的 SHA-256（64 位小写十六进制）
 FILE_HASH="$(printf 'chainproof-smoke-%s' "${RUN_ID}" | sha256sum | awk '{print $1}')"
 
-# 三人分配：50 / 30 / 20（与项目说明文档里的示例一致）
-CONTRIBUTORS_ALICE='[{"memberId":"alice","percentage":50},{"memberId":"bob","percentage":30},{"memberId":"charlie","percentage":20}]'
+# alice 70 / bob 30；charlie 未列入 contributors，但仍是独立确认人。
+# 这组数据直接验证“确认资格与贡献分配无关”。
+CONTRIBUTORS_ALICE='[{"memberId":"alice","percentage":70},{"memberId":"bob","percentage":30}]'
 CONTRIBUTORS_BAD_TOTAL='[{"memberId":"alice","percentage":50},{"memberId":"bob","percentage":47}]'
 
 echo
@@ -207,21 +208,21 @@ assert_error_code "重复 CreateProject 被拒" "${TX_OUT}" "${TX_RC}" "VALIDATI
 printf "\n${C_BLUE}--- 3. CreateMilestone 与参数校验${C_RESET}\n"
 
 # 非法比例总和（97%）
-invoke_tx "CreateMilestone" "${MILESTONE_ID}-bad" "${PROJECT_ID}" "t" "d" "f.zip" "${FILE_HASH}" "${CONTRIBUTORS_BAD_TOTAL}" >/dev/null 2>&1
+invoke_tx "CreateMilestone" "${MILESTONE_ID}-bad" "${PROJECT_ID}" "t" "d" "f.zip" "${FILE_HASH}" "${CONTRIBUTORS_BAD_TOTAL}" "alice" >/dev/null 2>&1
 assert_error_code "比例总和 97% 被拒" "${TX_OUT}" "${TX_RC}" "CONTRIBUTION_TOTAL_INVALID"
 
 # 非法哈希
-invoke_tx "CreateMilestone" "${MILESTONE_ID}-bad2" "${PROJECT_ID}" "t" "d" "f.zip" "not-a-sha256" "${CONTRIBUTORS_ALICE}" >/dev/null 2>&1
+invoke_tx "CreateMilestone" "${MILESTONE_ID}-bad2" "${PROJECT_ID}" "t" "d" "f.zip" "not-a-sha256" "${CONTRIBUTORS_ALICE}" "alice" >/dev/null 2>&1
 assert_error_code "非法 fileHash 被拒" "${TX_OUT}" "${TX_RC}" "VALIDATION_ERROR"
 
 # 不存在的成员
 invoke_tx "CreateMilestone" "${MILESTONE_ID}-bad3" "${PROJECT_ID}" "t" "d" "f.zip" "${FILE_HASH}" \
-  '[{"memberId":"alice","percentage":50},{"memberId":"mallory","percentage":50}]' >/dev/null 2>&1
+  '[{"memberId":"alice","percentage":50},{"memberId":"mallory","percentage":50}]' "alice" >/dev/null 2>&1
 assert_error_code "非项目成员作为贡献者被拒" "${TX_OUT}" "${TX_RC}" "VALIDATION_ERROR"
 
 # 合法创建
-info "提交 CreateMilestone（alice 50 / bob 30 / charlie 20）"
-invoke_tx "CreateMilestone" "${MILESTONE_ID}" "${PROJECT_ID}" "后端 API 开发" "第一阶段成果" "backend.zip" "${FILE_HASH}" "${CONTRIBUTORS_ALICE}" >/dev/null 2>&1
+info "提交 CreateMilestone（alice 70 / bob 30；charlie 0%，但仍需确认）"
+invoke_tx "CreateMilestone" "${MILESTONE_ID}" "${PROJECT_ID}" "后端 API 开发" "第一阶段成果" "backend.zip" "${FILE_HASH}" "${CONTRIBUTORS_ALICE}" "alice" >/dev/null 2>&1
 if [[ ${TX_RC} -eq 0 ]]; then
   pass "CreateMilestone 交易提交成功"
 else
@@ -235,11 +236,13 @@ if [[ ${TX_RC} -eq 0 ]]; then
   assert_json_field "Milestone.fileHash"     "${MILESTONE_JSON}" '.fileHash' "${FILE_HASH}"
   assert_json_field "Milestone.fileName"     "${MILESTONE_JSON}" '.fileName' "backend.zip"
   assert_json_field "Milestone.projectId"    "${MILESTONE_JSON}" '.projectId' "${PROJECT_ID}"
-  assert_json_field "Milestone.contributors 数量" "${MILESTONE_JSON}" '.contributors | length' "3"
+  assert_json_field "Milestone.submitterId" "${MILESTONE_JSON}" '.submitterId' "alice"
+  assert_json_field "Milestone.requiredConfirmerIds" "${MILESTONE_JSON}" '.requiredConfirmerIds | join(",")' "bob,charlie"
+  assert_json_field "Milestone.contributors 数量" "${MILESTONE_JSON}" '.contributors | length' "2"
   assert_json_field "Milestone.confirmations 初始为空" "${MILESTONE_JSON}" '.confirmations | length' "0"
-  assert_json_field "alice 比例"             "${MILESTONE_JSON}" '.contributors[] | select(.memberId=="alice") | .percentage' "50"
+  assert_json_field "alice 比例"             "${MILESTONE_JSON}" '.contributors[] | select(.memberId=="alice") | .percentage' "70"
   assert_json_field "bob 比例"               "${MILESTONE_JSON}" '.contributors[] | select(.memberId=="bob") | .percentage' "30"
-  assert_json_field "charlie 比例"           "${MILESTONE_JSON}" '.contributors[] | select(.memberId=="charlie") | .percentage' "20"
+  assert_json_field "charlie 未列入 contributors" "${MILESTONE_JSON}" '[.contributors[].memberId] | index("charlie") == null' "true"
 else
   fail "GetMilestone 查询失败：$(printf '%s' "${TX_OUT}" | tail -3 | tr '\n' ' ')"
 fi
@@ -250,29 +253,17 @@ fi
 
 printf "\n${C_BLUE}--- 4. 贡献确认状态机${C_RESET}\n"
 
-# 非贡献者表态
-invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "dave" "CONFIRMED" >/dev/null 2>&1
-assert_error_code "非贡献者表态被拒" "${TX_OUT}" "${TX_RC}" "MEMBER_NOT_IN_CLAIM"
-
-# 非法 decision
-invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "alice" "MAYBE" >/dev/null 2>&1
-assert_error_code "非法 decision 被拒" "${TX_OUT}" "${TX_RC}" "VALIDATION_ERROR"
-
-# alice 确认 -> 仍是 PENDING_CONFIRMATION
-info "alice 确认"
+# 提交者不能确认自己的提交
 invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "alice" "CONFIRMED" >/dev/null 2>&1
-if [[ ${TX_RC} -eq 0 ]]; then
-  pass "alice 确认交易提交成功"
-  query_tx "GetMilestone" "${MILESTONE_ID}" >/dev/null 2>&1
-  assert_json_field "1/3 确认后状态" "${TX_OUT}" '.status' "PENDING_CONFIRMATION"
-  assert_json_field "1/3 确认后记录数" "${TX_OUT}" '.confirmations | length' "1"
-else
-  fail "alice 确认失败：$(printf '%s' "${TX_OUT}" | tail -3 | tr '\n' ' ')"
-fi
+assert_error_code "提交者自我确认被拒" "${TX_OUT}" "${TX_RC}" "SUBMITTER_CANNOT_CONFIRM"
 
-# alice 改票 -> ALREADY_DECIDED
-invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "alice" "REJECTED" >/dev/null 2>&1
-assert_error_code "同一成员改票被拒" "${TX_OUT}" "${TX_RC}" "ALREADY_DECIDED"
+# 非确认人表态
+invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "dave" "CONFIRMED" >/dev/null 2>&1
+assert_error_code "非确认人表态被拒" "${TX_OUT}" "${TX_RC}" "MEMBER_NOT_REVIEWER"
+
+# 非法 decision（由合法确认人触发）
+invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "bob" "MAYBE" >/dev/null 2>&1
+assert_error_code "非法 decision 被拒" "${TX_OUT}" "${TX_RC}" "VALIDATION_ERROR"
 
 # bob 确认 -> 仍是 PENDING_CONFIRMATION
 info "bob 确认"
@@ -280,22 +271,26 @@ invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "bob" "CONFIRMED" >/dev/null 2
 if [[ ${TX_RC} -eq 0 ]]; then
   pass "bob 确认交易提交成功"
   query_tx "GetMilestone" "${MILESTONE_ID}" >/dev/null 2>&1
-  assert_json_field "2/3 确认后状态" "${TX_OUT}" '.status' "PENDING_CONFIRMATION"
-  assert_json_field "2/3 确认后记录数" "${TX_OUT}" '.confirmations | length' "2"
+  assert_json_field "1/2 确认后状态" "${TX_OUT}" '.status' "PENDING_CONFIRMATION"
+  assert_json_field "1/2 确认后记录数" "${TX_OUT}" '.confirmations | length' "1"
 else
   fail "bob 确认失败：$(printf '%s' "${TX_OUT}" | tail -3 | tr '\n' ' ')"
 fi
 
-# charlie 确认 -> VERIFIED
-info "charlie 确认（应触发 VERIFIED）"
+# bob 改票 -> ALREADY_DECIDED
+invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "bob" "REJECTED" >/dev/null 2>&1
+assert_error_code "同一确认人改票被拒" "${TX_OUT}" "${TX_RC}" "ALREADY_DECIDED"
+
+# charlie 未列入 contributors，但属于 requiredConfirmerIds；确认后应 VERIFIED
+info "charlie（0%）确认（应触发 VERIFIED）"
 invoke_tx "ConfirmContribution" "${MILESTONE_ID}" "charlie" "CONFIRMED" >/dev/null 2>&1
 if [[ ${TX_RC} -eq 0 ]]; then
   pass "charlie 确认交易提交成功"
   query_tx "GetMilestone" "${MILESTONE_ID}" >/dev/null 2>&1
   MILESTONE_JSON="${TX_OUT}"
-  assert_json_field "3/3 确认后状态为 VERIFIED" "${MILESTONE_JSON}" '.status' "VERIFIED"
-  assert_json_field "3/3 确认后记录数" "${MILESTONE_JSON}" '.confirmations | length' "3"
-  assert_json_field "三人均为 CONFIRMED" "${MILESTONE_JSON}" '[.confirmations[].decision] | unique | .[0]' "CONFIRMED"
+  assert_json_field "2/2 确认后状态为 VERIFIED" "${MILESTONE_JSON}" '.status' "VERIFIED"
+  assert_json_field "2/2 确认后记录数" "${MILESTONE_JSON}" '.confirmations | length' "2"
+  assert_json_field "两位确认人均为 CONFIRMED" "${MILESTONE_JSON}" '[.confirmations[].decision] | unique | .[0]' "CONFIRMED"
   assert_json_field "确认后有 txId" "${MILESTONE_JSON}" '(.txId | length) > 0' "true"
 else
   fail "charlie 确认失败：$(printf '%s' "${TX_OUT}" | tail -3 | tr '\n' ' ')"
@@ -308,7 +303,7 @@ assert_error_code "VERIFIED 后继续表态被拒" "${TX_OUT}" "${TX_RC}" "MILES
 # 确认过程不得篡改贡献比例与哈希
 query_tx "GetMilestone" "${MILESTONE_ID}" >/dev/null 2>&1
 assert_json_field "确认后 fileHash 未被篡改" "${TX_OUT}" '.fileHash' "${FILE_HASH}"
-assert_json_field "确认后 alice 比例未变" "${TX_OUT}" '.contributors[] | select(.memberId=="alice") | .percentage' "50"
+assert_json_field "确认后 alice 比例未变" "${TX_OUT}" '.contributors[] | select(.memberId=="alice") | .percentage' "70"
 
 # ---------------------------------------------------------------------------
 # 用例 5：REJECTED 分支
@@ -317,10 +312,10 @@ assert_json_field "确认后 alice 比例未变" "${TX_OUT}" '.contributors[] | 
 printf "\n${C_BLUE}--- 5. 拒绝分支${C_RESET}\n"
 
 REJECTED_MID="MR${RUN_ID}"
-invoke_tx "CreateMilestone" "${REJECTED_MID}" "${PROJECT_ID}" "被拒绝的里程碑" "d" "x.zip" "${FILE_HASH}" "${CONTRIBUTORS_ALICE}" >/dev/null 2>&1
+invoke_tx "CreateMilestone" "${REJECTED_MID}" "${PROJECT_ID}" "被拒绝的里程碑" "d" "x.zip" "${FILE_HASH}" "${CONTRIBUTORS_ALICE}" "alice" >/dev/null 2>&1
 [[ ${TX_RC} -eq 0 ]] && pass "创建待拒绝的里程碑" || fail "创建里程碑失败：$(printf '%s' "${TX_OUT}" | tail -2 | tr '\n' ' ')"
 
-invoke_tx "ConfirmContribution" "${REJECTED_MID}" "alice" "REJECTED" >/dev/null 2>&1
+invoke_tx "ConfirmContribution" "${REJECTED_MID}" "bob" "REJECTED" >/dev/null 2>&1
 if [[ ${TX_RC} -eq 0 ]]; then
   query_tx "GetMilestone" "${REJECTED_MID}" >/dev/null 2>&1
   assert_json_field "单人拒绝即 REJECTED" "${TX_OUT}" '.status' "REJECTED"
@@ -328,7 +323,7 @@ else
   fail "拒绝表态提交失败：$(printf '%s' "${TX_OUT}" | tail -3 | tr '\n' ' ')"
 fi
 
-invoke_tx "ConfirmContribution" "${REJECTED_MID}" "bob" "CONFIRMED" >/dev/null 2>&1
+invoke_tx "ConfirmContribution" "${REJECTED_MID}" "charlie" "CONFIRMED" >/dev/null 2>&1
 assert_error_code "REJECTED 后他人表态被拒" "${TX_OUT}" "${TX_RC}" "MILESTONE_CLOSED"
 
 # ---------------------------------------------------------------------------
@@ -356,9 +351,9 @@ if [[ ${TX_RC} -eq 0 ]]; then
   pass "GetProjectContributions 查询成功"
   CONTRIB_JSON="${TX_OUT}"
   assert_json_field "统计只基于 1 条 VERIFIED 里程碑" "${CONTRIB_JSON}" '.basedOnMilestones' "1"
-  assert_json_field "统计中的 alice 比例" "${CONTRIB_JSON}" '.members[] | select(.memberId=="alice") | .percentage' "50"
+  assert_json_field "统计中的 alice 比例" "${CONTRIB_JSON}" '.members[] | select(.memberId=="alice") | .percentage' "70"
   assert_json_field "统计中的 bob 比例" "${CONTRIB_JSON}" '.members[] | select(.memberId=="bob") | .percentage' "30"
-  assert_json_field "统计中的 charlie 比例" "${CONTRIB_JSON}" '.members[] | select(.memberId=="charlie") | .percentage' "20"
+  assert_json_field "统计中的 charlie 比例" "${CONTRIB_JSON}" '.members[] | select(.memberId=="charlie") | .percentage' "0"
   assert_json_field "REJECTED 里程碑未计入统计" "${CONTRIB_JSON}" '.basedOnMilestones' "1"
 else
   fail "GetProjectContributions 查询失败：$(printf '%s' "${TX_OUT}" | tail -3 | tr '\n' ' ')"
@@ -398,7 +393,7 @@ if [[ ${TX_RC} -eq 0 ]]; then
     assert_json_field "Certificate.certificateId" "${CERT_JSON}" '.certificateId' "${CERT_ID}"
     assert_json_field "Certificate.memberId" "${CERT_JSON}" '.memberId' "alice"
     assert_json_field "Certificate.projectId" "${CERT_JSON}" '.projectId' "${PROJECT_ID}"
-    assert_json_field "Certificate.contributionPercentage" "${CERT_JSON}" '.contributionPercentage' "50"
+    assert_json_field "Certificate.contributionPercentage" "${CERT_JSON}" '.contributionPercentage' "70"
     assert_json_field "Certificate.verificationStatus" "${CERT_JSON}" '.verificationStatus' "VALID"
     assert_json_field "Certificate 带 txId" "${CERT_JSON}" '(.txId | length) > 0' "true"
     CERT_MILESTONE_FILTER=".milestoneIds | index(\"${MILESTONE_ID}\") != null"
@@ -464,7 +459,7 @@ cat <<EOF
 
 ${C_GREEN}Issue #1 / Issue #2 验收链路已在真实 Fabric 网络上跑通：${C_RESET}
   Fabric Network → 部署 ChainProof Chaincode → CreateProject → GetProject
-  → CreateMilestone → 三人确认 → VERIFIED → 贡献统计 → 签发证书 → 验证 VALID
+  → CreateMilestone → 非提交者独立确认 → VERIFIED → 贡献统计 → 签发证书 → 验证 VALID
 
 链上数据（可答辩时展示）：
   projectId     = ${PROJECT_ID}
