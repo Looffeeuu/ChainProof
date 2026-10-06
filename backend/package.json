@@ -9,7 +9,9 @@
     "test": "node --test",
     "smoke:projects": "node scripts/smoke-project-api.mjs",
     "smoke:milestones": "node scripts/smoke-milestone-api.mjs",
-    "smoke:week3": "node scripts/smoke-week3-api.mjs"
+    "smoke:week3": "node scripts/smoke-week3-api.mjs",
+    "demo:seed": "node scripts/demo-seed.mjs",
+    "demo:reset": "bash scripts/demo-reset.sh"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.0",

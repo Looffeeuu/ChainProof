@@ -89,3 +89,75 @@ ChainProof/
 ## 当前状态
 
 🚧 项目基础骨架已建立，进入 Week 1 开发阶段。
+
+## Demo 演示
+
+答辩前可一键重置环境并写入演示数据，覆盖完整答辩故事线。
+
+### 前置条件
+
+- Docker Desktop 已启动
+- WSL2 已安装（Windows）或原生 Linux
+- Node.js >= 18, npm >= 9
+- Fabric 镜像和二进制已下载（首次使用需运行 `blockchain/network/chainproof-network.sh setup`）
+
+### 一键重置（推荐）
+
+从仓库根目录执行：
+
+```bash
+cd blockchain/chaincode && npm install   # 首次安装依赖
+cd ../../backend && npm install          # 首次安装依赖
+npm run demo:reset                       # 一键重置 + 写入 Demo 数据
+```
+
+此命令会：
+1. 关闭旧 Fabric 网络并清理本地账本
+2. 启动新网络并部署最新链码
+3. 启动 Backend 服务
+4. 写入 Demo 演示数据
+
+预计耗时 3-5 分钟。
+
+### 仅写入数据
+
+如果网络和 Backend 已就绪，可直接执行 seed：
+
+```bash
+cd backend
+npm run demo:seed
+```
+
+### Demo 数据内容
+
+写入 3 个项目、5 个里程碑、2 张证书：
+
+| 项目 | 里程碑 | 状态 | 说明 |
+|------|--------|------|------|
+| P001 VLA 安全性基准测试 | M001 选题报告与分工方案 | VERIFIED | alice 提交，bob + charlie 确认 |
+| | M002 数据标注规范与 200 条样本 | VERIFIED | bob 提交，alice + charlie 确认 |
+| | M003 初版评测指标与权重 | REJECTED | alice 提交，bob 拒绝 |
+| | M004 基准测试集 v0.3 与评测脚本 | PENDING | alice 提交，bob 确认，charlie 未确认 |
+| P002 课程实验报告归档 | M101 实验一至实验四报告归档 | VERIFIED | bob 提交，alice + charlie 确认 |
+| P003 答辩演示脚本 | M301 答辩演示脚本初稿 | VERIFIED | alice 提交，charlie 确认但贡献 0% |
+
+证书：
+- `CERT-P001-ALICE` — alice @ P001，贡献 55%
+- `CERT-P002-BOB` — bob @ P002，贡献 33%
+
+NOT_FOUND 演示 ID：`CP-DEMO-NOT-FOUND`
+
+### 前端入口
+
+启动 Frontend 后访问：
+
+```bash
+cd frontend && npm run dev
+```
+
+- Dashboard → http://localhost:5173/
+- 项目详情 → http://localhost:5173/projects/P001
+- 里程碑确认（PENDING）→ http://localhost:5173/projects/P001/milestones/M004
+- 贡献证书 → http://localhost:5173/projects/P001/certificates/CERT-P001-ALICE
+- 公开验证 → http://localhost:5173/verify/CERT-P001-ALICE
+- 公开验证 404 → http://localhost:5173/verify/CP-DEMO-NOT-FOUND

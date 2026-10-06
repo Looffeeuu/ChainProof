@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+#
+# ChainProof Demo 一键重置脚本（Issue #26）
+#
+# 功能：关闭旧网络 → 清理本地账本 → 启动网络 → 部署最新链码 → 等待 Backend → 执行 seed
+#
+# 用法：
+#   npm run demo:reset          # 从仓库根目录运行
+#   ./scripts/demo-reset.sh     # 从 backend/ 目录运行
+#
+# 前置条件：
+#   - Docker Desktop 已启动
+#   - WSL2 已安装（Windows）或原生 Linux
+#   - Node.js >= 18, npm >= 9
+#   - Fabric 镜像和二进制已下载（首次运行 chainproof-network.sh setup）
+#
+# 预计耗时：3-5 分钟（取决于网络速度和机器性能）
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${BACKEND_DIR}/.." && pwd)"
+NETWORK_SCRIPT="${REPO_ROOT}/blockchain/network/chainproof-network.sh"
+
+# 颜色
+if [[ -t 1 ]]; then
+  C_RED='\033[0;31m'; C_GREEN='\033[0;32m'; C_YELLOW='\033[0;33m'
+  C_BLUE='\033[0;34m'; C_BOLD='\033[1m'; C_RESET='\033[0m'
+else
+  C_RED=''; C_GREEN=''; C_YELLOW=''; C_BLUE=''; C_BOLD=''; C_RESET=''
+fi
+
+info()    { printf "${C_BLUE}==>${C_RESET} %s\n" "$*"; }
+success() { printf "${C_GREEN}[OK]${C_RESET} %s\n" "$*"; }
+warn()    { printf "${C_YELLOW}[WARN]${C_RESET} %s\n" "$*" >&2; }
+fatal()   { printf "${C_RED}[FAIL]${C_RESET} %s\n" "$*" >&2; exit 1; }
+
+# ─── 破坏性操作确认 ──────────────────────────────────────────────────────────
+
+echo ""
+printf "${C_BOLD}${C_RED}"
+cat <<'EOF'
+╔══════════════════════════════════════════════════════════════════╗
+║                    ⚠️  破坏性重置警告  ⚠️                        ║
+╠══════════════════════════════════════════════════════════════════╣
+║  此脚本将执行以下操作：                                          ║
+║                                                                  ║
+║  1. 关闭当前 Fabric 网络（所有容器将被删除）                     ║
+║  2. 清理本地账本数据（所有链上状态将丢失）                       ║
+║  3. 重新启动网络并部署最新链码                                   ║
+║  4. 写入 Demo 演示数据（覆盖现有数据）                           ║
+║                                                                  ║
+║  ⚠️  所有现有数据将永久丢失！                                    ║
+║                                                                  ║
+║  如果你正在开发或测试，请先备份重要数据。                        ║
+╚══════════════════════════════════════════════════════════════════╝
+EOF
+printf "${C_RESET}"
+echo ""
+
+read -rp "确认要继续吗？输入 yes 继续: " CONFIRM
+if [[ "${CONFIRM}" != "yes" ]]; then
+  info "已取消操作。"
+  exit 0
+fi
+
+echo ""
+
+# ─── Step 1: 关闭旧网络 ──────────────────────────────────────────────────────
+
+info "Step 1/5: 关闭 Fabric 网络..."
+if [[ -x "${NETWORK_SCRIPT}" ]]; then
+  bash "${NETWORK_SCRIPT}" down || warn "网络可能未运行，继续..."
+else
+  fatal "找不到网络脚本: ${NETWORK_SCRIPT}"
+fi
+success "网络已关闭"
+
+# ─── Step 2: 启动网络 ────────────────────────────────────────────────────────
+
+info "Step 2/5: 启动 Fabric 网络并创建通道..."
+bash "${NETWORK_SCRIPT}" up
+success "网络已启动"
+
+# ─── Step 3: 部署链码 ────────────────────────────────────────────────────────
+
+info "Step 3/5: 部署最新链码..."
+bash "${NETWORK_SCRIPT}" deploy
+success "链码已部署"
+
+# ─── Step 4: 启动 Backend ────────────────────────────────────────────────────
+
+info "Step 4/5: 启动 Backend 服务..."
+
+cd "${BACKEND_DIR}"
+
+# 检查是否已有 Backend 在运行
+if curl -s http://127.0.0.1:3000/api/health >/dev/null 2>&1; then
+  warn "Backend 已在运行，跳过启动步骤"
+else
+  # 后台启动 Backend
+  npm run dev > /tmp/chainproof-backend.log 2>&1 &
+  BACKEND_PID=$!
+  info "Backend 已启动（PID: ${BACKEND_PID}）"
+
+  # 等待 Backend 就绪
+  info "等待 Backend 就绪..."
+  MAX_WAIT=30
+  WAITED=0
+  while ! curl -s http://127.0.0.1:3000/api/health >/dev/null 2>&1; do
+    sleep 1
+    WAITED=$((WAITED + 1))
+    if [[ ${WAITED} -ge ${MAX_WAIT} ]]; then
+      fatal "Backend 启动超时（${MAX_WAIT}s），请检查日志: /tmp/chainproof-backend.log"
+    fi
+    printf "."
+  done
+  echo ""
+  success "Backend 已就绪"
+fi
+
+# ─── Step 5: 执行 Seed ───────────────────────────────────────────────────────
+
+info "Step 5/5: 写入 Demo 演示数据..."
+npm run demo:seed
+
+# ─── 完成 ────────────────────────────────────────────────────────────────────
+
+echo ""
+printf "${C_BOLD}${C_GREEN}"
+cat <<'EOF'
+╔══════════════════════════════════════════════════════════════════╗
+║                  ✅  Demo 环境初始化完成！  ✅                    ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║  Backend:  http://127.0.0.1:3000                                ║
+║  Frontend:  cd frontend && npm run dev                          ║
+║                                                                  ║
+║  已写入数据：                                                    ║
+║    - 3 个项目（P001 / P002 / P003）                              ║
+║    - 5 个里程碑（VERIFIED × 3 / REJECTED × 1 / PENDING × 1）    ║
+║    - 2 张贡献证书                                                ║
+║                                                                  ║
+║  前端入口：                                                      ║
+║    Dashboard    →  http://localhost:5173/                        ║
+║    项目详情     →  http://localhost:5173/projects/P001           ║
+║    里程碑确认   →  http://localhost:5173/projects/P001/          ║
+║                    milestones/M004  （PENDING 状态）              ║
+║    公开验证     →  http://localhost:5173/verify/                 ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝
+EOF
+printf "${C_RESET}"
+echo ""

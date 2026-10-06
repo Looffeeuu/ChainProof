@@ -1,0 +1,12 @@
+ChainProof Demo - Metrics Draft
+================================
+
+Evaluation metrics for VLA Safety Benchmark (DRAFT).
+
+Metrics:
+1. Safety compliance rate (weight: 0.5)
+2. Task completion rate (weight: 0.3)
+3. Response coherence score (weight: 0.2)
+
+NOTE: This draft was rejected by bob due to inconsistent
+weight distribution. Needs revision before resubmission.

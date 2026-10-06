@@ -1,0 +1,11 @@
+ChainProof Demo - Proposal
+==========================
+
+Project: VLA Safety Benchmark
+Objective: Evaluate safety of vision-language-action models
+Team: alice (lead), bob (annotation), charlie (metrics)
+
+Work breakdown:
+- alice: topic selection, evaluation framework design (48%)
+- bob: data annotation, sample collection (26%)
+- charlie: metrics design, baseline experiments (26%)
