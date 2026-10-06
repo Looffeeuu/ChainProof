@@ -159,7 +159,7 @@ cd frontend && npm run dev
 
 - Dashboard → http://localhost:5173/
 - 项目详情 → http://localhost:5173/projects/P001
-- 里程碑确认（PENDING）→ http://localhost:5173/projects/P001/milestones/M004
+- 里程碑确认（PENDING）→ http://localhost:5173/milestones/M004
 - 贡献证书 → 使用 seed 输出的 `/certificates/<certificateId>`
 - 公开验证 → 使用 seed 输出的 `/verify/<certificateId>`
 - 公开验证 404 → http://localhost:5173/verify/CP-DEMO-NOT-FOUND
