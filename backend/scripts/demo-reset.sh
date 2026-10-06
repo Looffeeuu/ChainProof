@@ -91,6 +91,31 @@ info "Step 3/5: 部署最新链码..."
 CC_SEQUENCE=1 bash "${NETWORK_SCRIPT}" deploy
 success "链码已部署（全新通道 sequence 1）"
 
+# 从刚生成的 test-network 证书导出 Backend Gateway 配置。
+# 这样全新 worktree 无需先手工创建 backend/.env。
+# shellcheck source=../../blockchain/network/config.env
+source "${REPO_ROOT}/blockchain/network/config.env"
+ORG1_DIR="${TEST_NETWORK_DIR}/organizations/peerOrganizations/org1.example.com"
+USER1_MSP="${ORG1_DIR}/users/User1@org1.example.com/msp"
+
+export FABRIC_MSP_ID="Org1MSP"
+export FABRIC_CHANNEL_NAME="${CHANNEL_NAME}"
+export FABRIC_CHAINCODE_NAME="${CC_NAME}"
+export FABRIC_PEER_ENDPOINT="localhost:7051"
+export FABRIC_PEER_HOST_ALIAS="peer0.org1.example.com"
+export FABRIC_TLS_CERT_PATH="${ORG1_DIR}/peers/peer0.org1.example.com/tls/ca.crt"
+export FABRIC_CERT_PATH="${USER1_MSP}/signcerts/User1@org1.example.com-cert.pem"
+export FABRIC_KEY_PATH="${USER1_MSP}/keystore/priv_sk"
+
+if [[ ! -f "${FABRIC_KEY_PATH}" ]]; then
+  FABRIC_KEY_PATH="$(find "${USER1_MSP}/keystore" -maxdepth 1 -type f -print -quit)"
+  export FABRIC_KEY_PATH
+fi
+
+[[ -f "${FABRIC_TLS_CERT_PATH}" ]] || fatal "找不到 Org1 peer TLS 证书：${FABRIC_TLS_CERT_PATH}"
+[[ -f "${FABRIC_CERT_PATH}" ]] || fatal "找不到 User1 签名证书：${FABRIC_CERT_PATH}"
+[[ -n "${FABRIC_KEY_PATH}" && -f "${FABRIC_KEY_PATH}" ]] || fatal "找不到 User1 私钥：${USER1_MSP}/keystore"
+
 # ─── Step 4: 启动 Backend ────────────────────────────────────────────────────
 
 info "Step 4/5: 启动 Backend 服务..."
