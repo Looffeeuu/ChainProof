@@ -210,8 +210,12 @@ input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; marg
    最重要的动作恰恰是选文件。
 
    注意只能改外壳与 ::file-selector-button，选完之后那段文件名是浏览器
-   自己画的，改不了字号——所以外壳本身用 --fs-small，两者才不至于差一档。 */
-input[type='file'] {
+   自己画的，改不了字号——所以外壳本身用 --fs-small，两者才不至于差一档。
+
+   :not(.sr-only)：确认页的核对框里有一个视觉隐藏的 file input（FileHashCheck）。
+   这条规则的优先级（0,1,1）高于 .sr-only（0,1,0），不排除的话它会把那个
+   1px 的隐藏元素重新撑成 100% 宽再加内边距，越出卡片，1280 宽下出现横向滚动条。 */
+input[type='file']:not(.sr-only) {
   width: 100%;
   padding: var(--sp-3);
   /* 虚线：这是一个「往里放东西」的槽，不是一个填字的框 */
@@ -223,7 +227,7 @@ input[type='file'] {
   cursor: pointer;
   transition: border-color var(--ease), background var(--ease);
 }
-input[type='file']:hover:not(:disabled) {
+input[type='file']:not(.sr-only):hover:not(:disabled) {
   border-color: var(--c-primary);
   background: var(--c-primary-weak);
 }
