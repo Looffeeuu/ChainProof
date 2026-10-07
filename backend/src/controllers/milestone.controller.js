@@ -6,6 +6,7 @@ import { removeUpload, storeUpload, uploadPath } from '../services/file-storage.
 import { ApplicationError } from '../utils/application-error.js'
 import { assertMatchingFileHash, parseContributors } from '../utils/milestone-input.js'
 import { publicMilestone } from '../utils/milestone-shape.js'
+import { isProjectMember } from '../utils/project-access.js'
 import { currentMemberId } from '../utils/request-member.js'
 
 export async function listMilestones(req, res, next) {
@@ -106,7 +107,17 @@ export async function getContributions(req, res, next) {
 
 export async function downloadMilestoneFile(req, res, next) {
   try {
+    const memberId = currentMemberId(req)
+    if (!memberId) {
+      throw new ApplicationError(400, 'VALIDATION_ERROR', '请求头 X-Member-Id 为必填项。')
+    }
+
     const milestone = await evaluateTransaction('GetMilestone', req.params.milestoneId)
+    const project = await evaluateTransaction('GetProject', milestone.projectId)
+    if (!isProjectMember(project, memberId)) {
+      throw new ApplicationError(403, 'MEMBER_NOT_IN_CLAIM', '只有项目成员可以下载原文件。')
+    }
+
     const path = uploadPath(req.params.milestoneId)
     await access(path)
     res.download(path, milestone.fileName || `${req.params.milestoneId}.bin`, (error) => {

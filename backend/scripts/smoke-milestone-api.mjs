@@ -74,6 +74,20 @@ const listed = await json(`projects/${projectId}/milestones`, as('alice'))
 if (!listed.some((item) => item.milestoneId === created.milestoneId)) throw new Error('milestone missing from project list')
 await json(`milestones/${created.milestoneId}`, as('alice'))
 
+const missingDownloadIdentity = await json(`milestones/${created.milestoneId}/file`, {}, 400)
+if (missingDownloadIdentity.error?.code !== 'VALIDATION_ERROR') {
+  throw new Error('expected download without X-Member-Id to fail with VALIDATION_ERROR')
+}
+
+const deniedDownload = await json(
+  `milestones/${created.milestoneId}/file`,
+  as('dave'),
+  403
+)
+if (deniedDownload.error?.code !== 'MEMBER_NOT_IN_CLAIM') {
+  throw new Error('expected non-member download to fail with MEMBER_NOT_IN_CLAIM')
+}
+
 const downloaded = await fetch(new URL(`milestones/${created.milestoneId}/file`, BASE), as('alice'))
 if (!downloaded.ok) throw new Error(`download failed: ${downloaded.status}`)
 const downloadedHash = createHash('sha256').update(Buffer.from(await downloaded.arrayBuffer())).digest('hex')

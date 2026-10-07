@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { publicProject, visibleProjects } from '../src/utils/project-access.js'
+import { isProjectMember, publicProject, visibleProjects } from '../src/utils/project-access.js'
 
 const projects = [
   { projectId: 'P001', members: ['alice', 'bob'] },
@@ -60,4 +60,16 @@ test('REST Project keeps txId optional for older records', () => {
     status: 'ACTIVE'
   }
   assert.deepEqual(publicProject({ ...project, docType: 'project' }), project)
+})
+
+test('recognizes only an explicitly listed project member', () => {
+  const project = { projectId: 'P001', members: ['alice', 'bob'] }
+  assert.equal(isProjectMember(project, ' alice '), true)
+  assert.equal(isProjectMember(project, 'charlie'), false)
+})
+
+test('rejects missing identity and malformed member lists', () => {
+  assert.equal(isProjectMember({ members: ['alice'] }, null), false)
+  assert.equal(isProjectMember({ members: null }, 'alice'), false)
+  assert.equal(isProjectMember(null, 'alice'), false)
 })
