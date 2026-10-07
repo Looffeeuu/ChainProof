@@ -162,7 +162,7 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 
 ### GET `/milestones/:milestoneId/file`
 
-返回链下托管的原始文件，`Content-Disposition` 使用链上 `fileName`。链上存在里程碑但本地文件缺失时返回 HTTP 404 + `FILE_NOT_FOUND`。
+请求必须携带 `X-Member-Id`。后端先读取里程碑及所属项目，只有项目 `members` 中的成员可以下载；缺少身份头返回 HTTP 400 + `VALIDATION_ERROR`，非项目成员返回 HTTP 403 + `MEMBER_NOT_IN_CLAIM`。通过成员校验后，返回链下托管的原始文件，`Content-Disposition` 使用链上 `fileName`。链上存在里程碑但本地文件缺失时返回 HTTP 404 + `FILE_NOT_FOUND`。
 
 ### POST `/milestones/:milestoneId/confirmations`
 
@@ -379,8 +379,9 @@ Project 的 `txId` 是创建该项目的 Fabric 交易 ID（64 位小写十六�
 4. `GET /projects/:id/milestones`
 5. `POST /projects/:id/milestones`
 6. `GET /milestones/:id`
-7. `POST /milestones/:id/confirmations`
-8. `GET /projects/:id/contributions`
-9. Certificate / verify 系列
+7. `GET /milestones/:id/file`
+8. `POST /milestones/:id/confirmations`
+9. `GET /projects/:id/contributions`
+10. Certificate / verify 系列
 
 BC 每完成一个接口就通知 A，不需要等待整套后端全部完成。
