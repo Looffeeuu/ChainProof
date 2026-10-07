@@ -606,6 +606,21 @@ async function 下载原文件后核对一致(page) {
     ci.dispatchEvent(new Event('change', { bubbles: true }))
     const verdict = await $until(() => $text('.checker .verdict'), '核对结论')
 
+    // 项目详情时间线上的「下载文件」走同一条路：拿到的是同一份字节、同一个文件名。
+    // 应用内跳转，不整页刷新——Mock 的原始字节只存在本次会话里
+    window.__saved = null
+    const milestonePath = location.pathname
+    await $goto('/projects/P003', () => document.querySelector('.timeline'), '回到项目详情的时间线')
+    const row = await $until(() => $$('.timeline .item').find((li) => li.querySelector('.title')?.textContent.includes('下载演示')), '时间线上刚提交的那一条')
+    ;[...row.querySelectorAll('button')].find((b) => b.textContent.includes('下载文件')).click()
+    await $until(() => window.__saved?.name, '时间线下载触发了保存')
+    const fromTimeline = {
+      name: window.__saved.name,
+      hash: await hex(window.__saved.blob),
+      notice: Boolean(row.querySelector('.notice'))
+    }
+    await $goto(milestonePath, () => document.querySelector('.download'), '回到里程碑详情页')
+
     // bob 不在 P003：不给按钮，说明原因
     await $pick('bob')
     await $until(() => document.querySelector('.download'), '换成 bob 之后的文件区')
@@ -616,7 +631,7 @@ async function 下载原文件后核对一致(page) {
 
     return JSON.stringify({
       name: window.__saved.name, size: window.__saved.blob.size, status,
-      stored, downloaded, original, verdict, outsider
+      stored, downloaded, original, verdict, outsider, fromTimeline
     })
   })()`)
 
@@ -626,6 +641,9 @@ async function 下载原文件后核对一致(page) {
   assert('下载回来的哈希与页面上的存证一致', r.stored === r.downloaded, `存证 ${r.stored.slice(0, 16)}…`)
   assert('下载完指向下一步：拖进核对框', String(r.status).includes('拖进下面的方框'), r.status)
   assert('拖回核对框得出「一致」', String(r.verdict).includes('一致，是同一份文件'), r.verdict)
+  assert('时间线下载保留了原文件名', r.fromTimeline.name === '原件.bin', r.fromTimeline.name)
+  assert('时间线下载回来的就是上传的那一份', r.fromTimeline.hash === r.original, `${r.fromTimeline.hash.slice(0, 16)}…`)
+  assert('时间线下载成功时不出错误提示', r.fromTimeline.notice === false, `notice=${r.fromTimeline.notice}`)
   assert('非项目成员没有下载按钮', r.outsider.button === false, `button=${r.outsider.button}`)
   assert('非项目成员看到原因', r.outsider.text.includes('只有项目成员可以下载原文件'), r.outsider.text)
 
@@ -640,6 +658,38 @@ async function 下载原文件后核对一致(page) {
   assert('文件缺失时说清是哪一步失败', String(missing.notice).includes('原文件没能下载'), missing.notice)
   assert('文件缺失时原样显示原因', String(missing.notice).includes('链下原始文件不存在'), missing.notice)
   assert('失败之后按钮还在，可以再试', missing.stillButton === true, `button=${missing.stillButton}`)
+}
+
+/**
+ * 时间线上的「下载文件」失败时要说话（PR #29 review）。
+ *
+ * 默认夹具只有哈希没有原始字节，每条都会回 FILE_NOT_FOUND。
+ * 只打 console 的话点了没反应，像按钮坏了；这里要求错误出现在出错的那一条下面，
+ * 原样带着后端的 message，其他条目不受影响，按钮还在可以再试。
+ */
+async function 时间线下载失败要说话(page) {
+  await goAs(page, 'alice', '/projects/P001', '.timeline')
+  await page.evaluate(HELPERS)
+  const r = await evalJSON(page, `(async () => {
+    await $settled()
+    const items = $$('.timeline .item')
+    const row = items[0]
+    const btn = () => [...row.querySelectorAll('button')].find((b) => b.textContent.includes('下载文件'))
+    ;(await $until(btn, '时间线上的下载按钮')).click()
+    const notice = await $until(() => row.querySelector('.notice'), '这一条下面的错误提示')
+    return JSON.stringify({
+      text: notice.textContent.trim(),
+      role: notice.getAttribute('role'),
+      others: items.slice(1).filter((li) => li.querySelector('.notice')).length,
+      total: items.length,
+      stillButton: Boolean(btn())
+    })
+  })()`)
+  assert('时间线下载失败时说清是哪一步失败', r.text.includes('原文件没能下载'), r.text)
+  assert('时间线下载失败时原样显示原因', r.text.includes('链下原始文件不存在'), r.text)
+  assert('错误提示会被读屏念出来', r.role === 'alert', `role=${r.role}`)
+  assert('错误只出现在出错的那一条下面', r.total > 1 && r.others === 0, `共 ${r.total} 条，其他条目出错误 ${r.others} 处`)
+  assert('失败之后按钮还在，可以再试', r.stillButton === true, `button=${r.stillButton}`)
 }
 
 /**
@@ -865,6 +915,7 @@ const SCENARIOS = [
   ['零贡献成员不能签发', 零贡献成员不能签发],
   ['提交页说清谁来确认', 提交页说清谁来确认],
   ['下载原文件后核对一致', 下载原文件后核对一致],
+  ['时间线下载失败要说话', 时间线下载失败要说话],
   ['验证页换编号不留旧结果', 验证页换编号不留旧结果],
   ['比例超出时横条溢出', 比例超出时横条溢出],
   ['拒绝要二次确认', 拒绝要二次确认],

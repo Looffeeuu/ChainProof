@@ -3,6 +3,7 @@ import StatusBadge from '../base/StatusBadge.vue'
 import HashText from '../base/HashText.vue'
 import ConfirmProgress from './ConfirmProgress.vue'
 import AwaitingYou from './AwaitingYou.vue'
+import ErrorNotice from '../base/ErrorNotice.vue'
 import { computed, ref } from 'vue'
 import { formatDateTime } from '../../utils/format-time.js'
 import { asObjectList } from '../../utils/list.js'
@@ -33,21 +34,26 @@ const TONE = {
 }
 
 /**
- * 下载里程碑文件。下载失败时只打 console，不弹 alert——
- * 时间线是只读展示，不该被一个下载失败打断浏览。
- *
- * 取数与保存和确认页走同一条路（api/milestones.js + utils/save-blob.js），
+ * 下载里程碑文件。取数与保存和确认页走同一条路（api/milestones.js + utils/save-blob.js），
  * 文件名同样取链上的 fileName，没有就用 ID。
+ *
+ * 失败要让人看见：只打 console 的话，点了没反应，看起来就是按钮坏了。
+ * 错误按里程碑记，显示在出错的那一条下面，不影响其他条目；不弹 alert，
+ * 浏览时间线不会被打断。再点一次就清掉旧的错误重试。
  */
 const downloadingId = ref('')
+const downloadErrors = ref({})   // milestoneId → Error
 async function download(m) {
   downloadingId.value = m.milestoneId
+  const errors = { ...downloadErrors.value }
+  delete errors[m.milestoneId]
+  downloadErrors.value = errors
   try {
     // memberId 只有假接口用得上——真接口靠请求头 X-Member-Id 认人
     const blob = await downloadMilestoneFile(m.milestoneId, { memberId: session.currentMemberId })
     saveBlob(blob, m.fileName || `${m.milestoneId}.bin`)
   } catch (e) {
-    console.error('下载失败:', e)
+    downloadErrors.value = { ...downloadErrors.value, [m.milestoneId]: e }
   } finally {
     downloadingId.value = ''
   }
@@ -87,6 +93,13 @@ async function download(m) {
           </button>
           <RouterLink :to="`/milestones/${m.milestoneId}`" class="t-small more">查看声明</RouterLink>
         </div>
+
+        <ErrorNotice
+          v-if="downloadErrors[m.milestoneId]"
+          :error="downloadErrors[m.milestoneId]"
+          title="原文件没能下载"
+          class="download-error"
+        />
 
         <!-- 链上交易 ID。没有它的话，「链上已验证」那个徽章在界面上没有任何依据可指，
              整个产品最核心的主张就只是一句需要被相信的话（docs/API.md §6） -->
@@ -186,6 +199,8 @@ async function download(m) {
 }
 .download-link:hover:not(:disabled) { opacity: 0.8; }
 .download-link:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.download-error { margin-top: var(--sp-2); }
 
 /* 链上交易独占一条：它和上面那行的文件哈希是两个不同的东西
    （一个是内容的指纹，一个是这次上链的凭据），并排放会被当成同一类 */
