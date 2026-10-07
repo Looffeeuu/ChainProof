@@ -28,7 +28,16 @@ function fail(code, message, status = 400) {
 const db = {
   projects: clone(projects),
   milestones: clone(milestones),
-  certificates: clone(certificates)
+  certificates: clone(certificates),
+  /**
+   * 里程碑 ID → 上传时的原始文件（Blob）。相当于后端的链下托管目录。
+   *
+   * 夹具里那几条只有哈希、没有字节——编一份内容出来，哈希就对不上了，
+   * 「下载 → 本地核对 → 一致」这条演示反而会得出相反的结论。
+   * 所以它们下载时如实回 FILE_NOT_FOUND（与后端「链上有记录、本地文件缺失」同一个回答），
+   * 本次会话里新提交的里程碑才下载得到，而且下回来的就是当初上传的那几个字节。
+   */
+  files: new Map()
 }
 
 /** 造一个 64 位十六进制的假交易 ID。真接口给的是 Fabric 的 transaction ID */
@@ -147,7 +156,34 @@ export async function createMilestone(projectId, payload) {
     txId: fakeTxId()
   }
   db.milestones.push(created)
+  // 只收真的文件对象。自检脚本里有用 { size } 冒充文件的地方，那种没有字节可存
+  if (typeof Blob !== 'undefined' && payload.file instanceof Blob) {
+    db.files.set(created.milestoneId, payload.file)
+  }
   return clone(created)
+}
+
+/**
+ * 下载原文件（docs/API.md §3）。检查顺序：里程碑在不在 → 是不是项目成员 → 文件在不在。
+ *
+ * 「不是项目成员」的错误码后端还没定（#25 由组长补权限保护），这里先用
+ * docs/API.md §7 里现成的 MEMBER_NOT_IN_CLAIM / 403。页面不按错误码分支，
+ * 只显示 message，所以后端最终换成别的码也不用改页面。
+ */
+export async function downloadMilestoneFile(milestoneId, { memberId } = {}) {
+  await delay()
+  const found = db.milestones.find((m) => m.milestoneId === milestoneId)
+  if (!found) throw fail('MILESTONE_NOT_FOUND', `没有找到里程碑 ${milestoneId}。`, 404)
+
+  const project = db.projects.find((p) => p.projectId === found.projectId)
+  if (!project?.members.includes(memberId)) {
+    throw fail('MEMBER_NOT_IN_CLAIM', '只有项目成员可以下载原文件。', 403)
+  }
+
+  const file = db.files.get(milestoneId)
+  if (!file) throw fail('FILE_NOT_FOUND', '该里程碑的链下原始文件不存在。', 404)
+  // 交出去的是一份新的 Blob，和 clone 同一个道理：页面拿到的不该是「服务器上的那一份」
+  return file.slice(0, file.size, file.type)
 }
 
 /**
@@ -308,27 +344,4 @@ export async function verifyCertificate(certificateId) {
     verificationStatus: found.verificationStatus,
     certificate: clone(found)
   }
-}
-
-/**
- * 下载里程碑文件。假接口没有真实文件，造一个文本 blob 演示下载流程。
- * 真接口返回的是链下托管的原始文件（docs/API.md §3）。
- */
-export async function downloadMilestoneFile(milestoneId) {
-  await delay()
-  const found = db.milestones.find((m) => m.milestoneId === milestoneId)
-  if (!found) throw fail('FILE_NOT_FOUND', `里程碑 ${milestoneId} 的链下文件不存在。`, 404)
-
-  const content = `这是里程碑 ${milestoneId} 的演示文件。\n\n标题：${found.title}\n文件哈希：${found.fileHash}\n`
-  const blob = new Blob([content], { type: 'text/plain' })
-  const fileName = found.fileName || `${milestoneId}.txt`
-
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
 }

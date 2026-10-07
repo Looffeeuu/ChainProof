@@ -36,7 +36,7 @@
  * 本机跑不了 Fabric，但跑得了这个失败模式。
  */
 import { loadProjectDetail } from '../src/api/queries.js'
-import { get } from '../src/api/client.js'
+import { get, getBlob } from '../src/api/client.js'
 
 const results = []
 
@@ -338,6 +338,41 @@ async function 后端没起来时说人话() {
     typeof globalThis.fetch)
 }
 
+/**
+ * 下载原文件走 getBlob（#25）：成功时交出原始字节、不碰 json()；
+ * 失败时照常是带 code 的 ApiError；身份头照样带上——后端靠它判断是不是项目成员。
+ */
+async function 下载原文件拿到的是字节() {
+  const bytes = new Uint8Array([0, 1, 2, 250, 251, 252])
+  let sentHeaders = null
+  const blob = await withFetch(async (_url, init) => {
+    sentHeaders = init?.headers ?? null
+    return {
+      ok: true,
+      status: 200,
+      blob: async () => new Blob([bytes]),
+      json: async () => { throw new Error('下载成功时不该解析 JSON') }
+    }
+  }, () => getBlob('/milestones/M1/file'))
+  const back = new Uint8Array(await blob.arrayBuffer())
+  assert('成功时交出 Blob，字节一个不差',
+    back.length === bytes.length && back.every((b, i) => b === bytes[i]), `${back.length} 字节`)
+  assert('下载请求带着身份头', Boolean(sentHeaders?.['X-Member-Id']), JSON.stringify(sentHeaders))
+
+  const denied = await withFetch(async () =>
+    fakeResponse(403, { error: { code: 'MEMBER_NOT_IN_CLAIM', message: '只有项目成员可以下载原文件。' } }),
+  () => getBlob('/milestones/M1/file').then(() => null, (e) => e))
+  assert('无权限时是带 code 的错误，message 原样',
+    denied?.code === 'MEMBER_NOT_IN_CLAIM' && denied?.status === 403 && denied?.message === '只有项目成员可以下载原文件。',
+    `${denied?.code} / ${denied?.status} / ${denied?.message}`)
+
+  const missing = await withFetch(async () =>
+    fakeResponse(404, { error: { code: 'FILE_NOT_FOUND', message: '该里程碑的链下原始文件不存在。' } }),
+  () => getBlob('/milestones/M1/file').then(() => null, (e) => e))
+  assert('文件缺失时是 FILE_NOT_FOUND', missing?.code === 'FILE_NOT_FOUND' && missing?.status === 404,
+    `${missing?.code} / ${missing?.status}`)
+}
+
 const SCENARIOS = [
   ['真项目 + 其余仍是假数据', 真项目其余仍是假数据],
   ['假数据回空数组不算事实', 假数据回空数组不算事实],
@@ -346,7 +381,8 @@ const SCENARIOS = [
   ['项目本身不存在', 项目本身不存在],
   ['全部就绪', 全部就绪],
   ['只有一块没切', 只有一块没切],
-  ['后端没起来时说人话', 后端没起来时说人话]
+  ['后端没起来时说人话', 后端没起来时说人话],
+  ['下载原文件拿到的是字节', 下载原文件拿到的是字节]
 ]
 
 for (const [name, run] of SCENARIOS) {

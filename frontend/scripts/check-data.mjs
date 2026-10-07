@@ -1037,6 +1037,41 @@ await check('假接口对超限文件回 413 + FILE_TOO_LARGE', async () => {
   return err.message
 })
 
+// —— 下载原文件（#25）——
+
+await check('下载原文件：拿回来的是上传时的那几个字节，哈希与存证一致', async () => {
+  const bytes = new TextEncoder().encode('下载自检：这一份要原样回来')
+  const hash = sha256Bytes(bytes)
+  const m = await api.createMilestone('P001', {
+    title: '下载自检', fileName: 'roundtrip.txt', fileHash: hash,
+    file: new Blob([bytes]), contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
+  })
+  // 确认人 bob 下载——他在表态之前要能拿到原件
+  const blob = await api.downloadMilestoneFile(m.milestoneId, { memberId: 'bob' })
+  const back = new Uint8Array(await blob.arrayBuffer())
+  assert(back.length === bytes.length && back.every((b, i) => b === bytes[i]), '字节对不上')
+  assert(sha256Bytes(back) === m.fileHash, '下载回来的文件哈希与存证不一致')
+  return `${back.length} 字节 · ${m.fileHash.slice(0, 12)}…`
+})
+
+await check('下载原文件：非项目成员 403，文件缺失 FILE_NOT_FOUND，里程碑不存在 404', async () => {
+  const bytes = new TextEncoder().encode('P003 的文件')
+  const m = await api.createMilestone('P003', {
+    title: '权限自检', fileName: 'p3.txt', fileHash: sha256Bytes(bytes),
+    file: new Blob([bytes]), contributors: [{ memberId: 'alice', percentage: 100 }], submitterId: 'alice'
+  })
+  const outsider = await rejects(() => api.downloadMilestoneFile(m.milestoneId, { memberId: 'bob' }))  // bob 不在 P003
+  assert(outsider.status === 403, `非成员得到 ${outsider.code} / ${outsider.status}`)
+
+  // 夹具只有哈希没有字节：如实回「链下文件不存在」，不编一份内容出来
+  const missing = await rejects(() => api.downloadMilestoneFile('M001', { memberId: 'alice' }))
+  assert(missing.code === 'FILE_NOT_FOUND' && missing.status === 404, `夹具得到 ${missing.code} / ${missing.status}`)
+
+  const none = await rejects(() => api.downloadMilestoneFile('M-NOPE', { memberId: 'alice' }))
+  assert(none.code === 'MILESTONE_NOT_FOUND' && none.status === 404, `不存在得到 ${none.code} / ${none.status}`)
+  return `${outsider.code} · ${missing.code} · ${none.code}`
+})
+
 // 这一条会往假接口的 db 里多建一个项目，所以放在所有数项目个数的检查之后
 await check('单成员项目不能提交里程碑：400，且说清至少要两名成员', async () => {
   const solo = await api.createProject({ name: '单人项目', description: '', ownerId: 'alice', members: ['alice'] })

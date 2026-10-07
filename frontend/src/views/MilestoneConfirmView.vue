@@ -20,6 +20,7 @@ import { formatDateTime } from '../utils/format-time.js'
 import { asObjectList } from '../utils/list.js'
 import { session } from '../stores/session.js'
 import { confirmGate, confirmersOf, submitterOf } from '../utils/confirm-gate.js'
+import { saveBlob } from '../utils/save-blob.js'
 
 /**
  * 贡献确认页。入口是项目详情 Timeline 每行的「查看声明」。
@@ -36,12 +37,31 @@ const route = useRoute()
  */
 const projectName = ref('')
 
+/**
+ * 项目成员名单，用来决定「下载原文件」给不给按钮。null 表示没取到——
+ * 那时照样给按钮，能不能下由后端判断（它会回 403），不因为一个附带请求失败就把入口藏起来。
+ */
+const projectMembers = ref(null)
+
+/**
+ * 下载原文件的三个状态。**必须声明在 load 之前**：load 在 setup 阶段就被
+ * immediate watch 同步调用，里面的 resetDownload 会读这几个 ref——
+ * 声明在后面会踩 const 的暂时性死区，整页白屏（MilestoneCreateView 里同一个坑踩过两次）。
+ */
+const downloading = ref(false)
+const downloadError = ref(null)
+const downloadedName = ref('')
+
 async function load(milestoneId) {
+  resetDownload()
   const found = await getMilestone(milestoneId)
   try {
-    projectName.value = (await getProject(found.projectId)).name
+    const project = await getProject(found.projectId)
+    projectName.value = project.name
+    projectMembers.value = Array.isArray(project.members) ? project.members : null
   } catch {
     projectName.value = ''
+    projectMembers.value = null
   }
   return found
 }
@@ -80,25 +100,6 @@ const gateReason = computed(() => {
 
 const deciding = ref('')       // 'CONFIRMED' | 'REJECTED' | ''：哪个按钮在转圈
 const decideError = ref(null)
-const downloading = ref(false)
-const downloadError = ref(null)
-
-/**
- * 下载链下托管的原始文件。下载失败时把错误留在页面上，
- * 而不是用 alert——同一个页面已经有 ErrorNotice 的模式，保持一致。
- */
-async function download() {
-  downloading.value = true
-  downloadError.value = null
-  try {
-    await downloadMilestoneFile(route.params.id)
-  } catch (e) {
-    downloadError.value = e
-  } finally {
-    downloading.value = false
-  }
-}
-
 /**
  * 刚刚表完态时记下结果，用来给一条明确的成功反馈。
  *
@@ -136,6 +137,43 @@ const successText = computed(() => {
   }
   return '已记录你的确认。'
 })
+
+/**
+ * 下载原文件（#25）。确认人在表态之前要能拿到原件，自己打开看过、
+ * 再拖进下面的核对框比一次哈希——「下载 → 本地核对 → 一致 → 确认」是答辩里的一整步。
+ *
+ * 只有项目成员能下载。名单已知且当前身份不在里面时，不给按钮，直接说为什么；
+ * 名单未知时给按钮，由后端判断。
+ */
+const canDownload = computed(() =>
+  projectMembers.value === null || projectMembers.value.includes(me.value)
+)
+
+function resetDownload() {
+  downloading.value = false
+  downloadError.value = null
+  downloadedName.value = ''
+}
+
+async function download() {
+  const m = milestone.value
+  if (!m) return
+  downloading.value = true
+  downloadError.value = null
+  downloadedName.value = ''
+  try {
+    // memberId 只有假接口用得上——真接口靠请求头 X-Member-Id 认人
+    const blob = await downloadMilestoneFile(m.milestoneId, { memberId: me.value })
+    // 文件名与后端 Content-Disposition 的取法一致：链上的 fileName，没有就用 ID
+    const name = m.fileName || `${m.milestoneId}.bin`
+    saveBlob(blob, name)
+    downloadedName.value = name
+  } catch (e) {
+    downloadError.value = e
+  } finally {
+    downloading.value = false
+  }
+}
 
 /**
  * 表态。**拒绝先问一次。**
@@ -220,6 +258,26 @@ async function decide(decision) {
           <dt class="t-label">SHA-256</dt>
           <dd><HashText :value="milestone.fileHash" full label="文件哈希" /></dd>
         </dl>
+
+        <!-- 原文件入口。没有哈希就没有文件，也就不给入口 -->
+        <div v-if="milestone.fileHash" class="download">
+          <BaseButton
+            v-if="canDownload"
+            variant="secondary"
+            :loading="downloading"
+            loading-text="下载中…"
+            @click="download"
+          >
+            下载原文件
+          </BaseButton>
+          <p v-else class="t-small t-soft">只有项目成员可以下载原文件。</p>
+          <!-- 下载完顺手指一下下一步：把它拖进下面的核对框 -->
+          <p v-if="downloadedName" class="t-small t-soft" role="status">
+            已下载 {{ downloadedName }}。把它拖进下面的方框，就能核对是不是同一份。
+          </p>
+        </div>
+        <ErrorNotice v-if="downloadError" :error="downloadError" title="原文件没能下载" class="block" />
+
         <p class="t-small t-soft check-intro">
           核对你手上的那份文件是不是同一份。
           <HelpTip title="为什么比哈希就够">
@@ -234,21 +292,6 @@ async function decide(decision) {
           :expected="milestone.fileHash"
           label="你手上的那份成果文件"
         />
-
-        <!-- 下载按钮。放在 FileHashCheck 之后：先让用户知道自己要核对什么，
-             再给一个「把文件拿下来核对」的动作。下载失败时显示错误，
-             和页面其他地方的 ErrorNotice 保持一致。 -->
-        <div class="download-row">
-          <BaseButton
-            variant="secondary"
-            :loading="downloading"
-            loading-text="下载中…"
-            @click="download"
-          >
-            下载原始文件
-          </BaseButton>
-          <ErrorNotice v-if="downloadError" :error="downloadError" title="下载失败" />
-        </div>
       </BaseCard>
 
       <BaseCard padding="none" class="block">
@@ -339,12 +382,12 @@ async function decide(decision) {
 
 .check-intro { margin-bottom: var(--sp-3); max-width: 68ch; }
 
-.download-row {
+.download {
   display: flex;
   align-items: center;
   gap: var(--sp-3);
   flex-wrap: wrap;
-  margin-top: var(--sp-4);
+  margin-bottom: var(--sp-4);
 }
 
 .file { display: grid; grid-template-columns: 120px 1fr; gap: var(--sp-2) var(--sp-4); margin: 0 0 var(--sp-4); }

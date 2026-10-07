@@ -554,6 +554,95 @@ async function 提交页说清谁来确认(page) {
 }
 
 /**
+ * 下载原文件 → 拖回核对框 → 一致（#25 的答辩演示链），以及两种拿不到的情况。
+ *
+ * 浏览器真的去保存文件的话，无头模式下拿不到结果，所以拦下「交给浏览器保存」那一步：
+ * 记下 Blob 与文件名，不真的触发下载。拦的是 URL.createObjectURL 与 <a download> 的点击，
+ * 正是 utils/save-blob.js 用到的两处——页面自己的取数、哈希、渲染一律照常走。
+ */
+async function 下载原文件后核对一致(page) {
+  await goAs(page, 'alice', '/projects/P003/milestones/new', 'form')
+  await page.evaluate(HELPERS)
+  const r = await evalJSON(page, `(async () => {
+    window.__saved = null
+    const create = URL.createObjectURL
+    URL.createObjectURL = (b) => { window.__saved = { blob: b, name: null }; return create.call(URL, b) }
+    const click = HTMLAnchorElement.prototype.click
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.download && window.__saved) { window.__saved.name = this.download; return }
+      return click.call(this)
+    }
+    const hex = async (blob) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))]
+      .map((b) => b.toString(16).padStart(2, '0')).join('')
+
+    // alice 在 P003 提交一份 3000 字节的文件
+    const title = document.querySelector('input[type=text]')
+    title.value = '下载演示'
+    title.dispatchEvent(new Event('input', { bubbles: true }))
+    const fi = document.querySelector('input[type=file]')
+    fi.files = $file('原件.bin', 3000)
+    fi.dispatchEvent(new Event('change', { bubbles: true }))
+    await $until(() => document.querySelector('.hash-line'), '文件哈希算完')
+    const nums = $$('.rows input[type=number]')
+    nums[0].value = 100
+    nums[0].dispatchEvent(new Event('input', { bubbles: true }))
+    await $until(() => $text('.total') === '100', '比例合计变成 100')
+    ;(await $until(() => $btn('提交并存证'), '提交按钮')).click()
+    await $until(() => location.pathname.startsWith('/milestones/M'), '提交后落到里程碑详情页')
+    await $settled()
+
+    const stored = document.querySelector('.file .hash .value')?.getAttribute('title') ?? ''
+    ;(await $until(() => $btn('下载原文件'), '下载按钮')).click()
+    await $until(() => window.__saved?.name, '保存那一步被触发')
+    const status = await $until(() => $$('.download p').map((p) => p.textContent.trim()).find((t) => t.startsWith('已下载')), '下载完成的提示')
+    const downloaded = await hex(window.__saved.blob)
+    const original = await hex(new Blob([new Uint8Array(3000)]))
+
+    // 把下载回来的那一份原样拖进核对框
+    const ci = document.querySelector('.checker input[type=file]')
+    const dt = new DataTransfer()
+    dt.items.add(new File([window.__saved.blob], window.__saved.name))
+    ci.files = dt.files
+    ci.dispatchEvent(new Event('change', { bubbles: true }))
+    const verdict = await $until(() => $text('.checker .verdict'), '核对结论')
+
+    // bob 不在 P003：不给按钮，说明原因
+    await $pick('bob')
+    await $until(() => document.querySelector('.download'), '换成 bob 之后的文件区')
+    const outsider = {
+      button: Boolean($btn('下载原文件')),
+      text: $$('.download p').map((p) => p.textContent.trim()).join(' / ')
+    }
+
+    return JSON.stringify({
+      name: window.__saved.name, size: window.__saved.blob.size, status,
+      stored, downloaded, original, verdict, outsider
+    })
+  })()`)
+
+  assert('下载保留了原文件名', r.name === '原件.bin', r.name)
+  assert('下载回来的字节数不变', r.size === 3000, `${r.size} 字节`)
+  assert('下载回来的就是上传的那一份', r.downloaded === r.original, `${r.downloaded.slice(0, 16)}… vs ${r.original.slice(0, 16)}…`)
+  assert('下载回来的哈希与页面上的存证一致', r.stored === r.downloaded, `存证 ${r.stored.slice(0, 16)}…`)
+  assert('下载完指向下一步：拖进核对框', String(r.status).includes('拖进下面的方框'), r.status)
+  assert('拖回核对框得出「一致」', String(r.verdict).includes('一致，是同一份文件'), r.verdict)
+  assert('非项目成员没有下载按钮', r.outsider.button === false, `button=${r.outsider.button}`)
+  assert('非项目成员看到原因', r.outsider.text.includes('只有项目成员可以下载原文件'), r.outsider.text)
+
+  // 夹具只有哈希没有字节：如实报「文件不存在」，按钮旁边出错误提示，不是静默失败
+  await goAs(page, 'charlie', '/milestones/M004', '.download')
+  await page.evaluate(HELPERS)
+  const missing = await evalJSON(page, `(async () => {
+    ;(await $until(() => $btn('下载原文件'), '下载按钮')).click()
+    await $until(() => $text('.notice'), '下载失败的提示')
+    return JSON.stringify({ notice: $text('.notice'), stillButton: Boolean($btn('下载原文件')) })
+  })()`)
+  assert('文件缺失时说清是哪一步失败', String(missing.notice).includes('原文件没能下载'), missing.notice)
+  assert('文件缺失时原样显示原因', String(missing.notice).includes('链下原始文件不存在'), missing.notice)
+  assert('失败之后按钮还在，可以再试', missing.stillButton === true, `button=${missing.stillButton}`)
+}
+
+/**
  * 比例超过 100% 时，横条真的装不下。
  *
  * `.seg` 少一个 `flex-shrink: 0`，flex 就会把超出的部分按比例压回容器宽度，
@@ -775,6 +864,7 @@ const SCENARIOS = [
   ['超限文件当场拦下', 超限文件当场拦下],
   ['零贡献成员不能签发', 零贡献成员不能签发],
   ['提交页说清谁来确认', 提交页说清谁来确认],
+  ['下载原文件后核对一致', 下载原文件后核对一致],
   ['验证页换编号不留旧结果', 验证页换编号不留旧结果],
   ['比例超出时横条溢出', 比例超出时横条溢出],
   ['拒绝要二次确认', 拒绝要二次确认],

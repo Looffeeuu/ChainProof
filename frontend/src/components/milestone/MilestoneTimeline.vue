@@ -3,11 +3,12 @@ import StatusBadge from '../base/StatusBadge.vue'
 import HashText from '../base/HashText.vue'
 import ConfirmProgress from './ConfirmProgress.vue'
 import AwaitingYou from './AwaitingYou.vue'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { formatDateTime } from '../../utils/format-time.js'
 import { asObjectList } from '../../utils/list.js'
+import { saveBlob } from '../../utils/save-blob.js'
 import { downloadMilestoneFile } from '../../api/milestones.js'
-import { ref } from 'vue'
+import { session } from '../../stores/session.js'
 
 /**
  * 里程碑时间线。spec/01 §2.7 把它列为重点页面：
@@ -34,12 +35,17 @@ const TONE = {
 /**
  * 下载里程碑文件。下载失败时只打 console，不弹 alert——
  * 时间线是只读展示，不该被一个下载失败打断浏览。
+ *
+ * 取数与保存和确认页走同一条路（api/milestones.js + utils/save-blob.js），
+ * 文件名同样取链上的 fileName，没有就用 ID。
  */
 const downloadingId = ref('')
-async function download(milestoneId) {
-  downloadingId.value = milestoneId
+async function download(m) {
+  downloadingId.value = m.milestoneId
   try {
-    await downloadMilestoneFile(milestoneId)
+    // memberId 只有假接口用得上——真接口靠请求头 X-Member-Id 认人
+    const blob = await downloadMilestoneFile(m.milestoneId, { memberId: session.currentMemberId })
+    saveBlob(blob, m.fileName || `${m.milestoneId}.bin`)
   } catch (e) {
     console.error('下载失败:', e)
   } finally {
@@ -75,7 +81,7 @@ async function download(milestoneId) {
             type="button"
             class="t-small download-link"
             :disabled="downloadingId === m.milestoneId"
-            @click.stop="download(m.milestoneId)"
+            @click.stop="download(m)"
           >
             {{ downloadingId === m.milestoneId ? '下载中…' : '下载文件' }}
           </button>

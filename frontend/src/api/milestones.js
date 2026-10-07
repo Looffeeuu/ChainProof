@@ -1,7 +1,7 @@
 /**
  * 里程碑相关的接口，返回 spec/02 §2.2 的对象。
  */
-import { get, post } from './client.js'
+import { get, getBlob, post } from './client.js'
 import * as mock from '../mock/handlers.js'
 import { useMock } from './mode.js'
 
@@ -35,6 +35,25 @@ export const createMilestone = (projectId, payload) => {
 }
 
 /**
+ * 下载里程碑的原文件，返回 Blob（docs/API.md §3 `GET /milestones/:id/file`）。
+ *
+ * **不能用普通链接。** `<a href>` 发出的请求带不上 `X-Member-Id`，
+ * 而下载要先确认当前身份是项目成员（#25）。所以走 fetch 拿字节，再由页面交给浏览器保存。
+ * 文件名不从响应头读：跨域时 `Content-Disposition` 默认读不到，
+ * 而它本来就等于里程碑上的 `fileName`，页面手里已经有了。
+ *
+ * 假接口拿不到请求头，所以和 confirmMilestone 一样显式收一个 memberId。
+ *
+ * @param {string} milestoneId
+ * @param {{memberId: string}} payload
+ * @returns {Promise<Blob>}
+ */
+export const downloadMilestoneFile = (milestoneId, payload = {}) =>
+  useMock('downloadMilestoneFile')
+    ? mock.downloadMilestoneFile(milestoneId, payload)
+    : getBlob(`/milestones/${milestoneId}/file`)
+
+/**
  * 提交一次确认，返回**更新后的完整 Milestone**（C 线已确认按此返回，docs/API.md §3）。
  *
  * 注意真接口的请求体**只有 `decision`**——表态的人是谁由请求头 `X-Member-Id` 决定，
@@ -48,53 +67,3 @@ export const confirmMilestone = (milestoneId, payload) =>
   useMock('confirmMilestone')
     ? mock.confirmMilestone(milestoneId, payload)
     : post(`/milestones/${milestoneId}/confirmations`, { decision: payload.decision })
-
-/**
- * 下载里程碑的链下原始文件（docs/API.md §3）。
- *
- * 后端返回的是二进制流 + Content-Disposition，所以不能走 client.js 的 JSON 解析。
- * 自己发 fetch，拿到 blob 后造一个临时 <a> 触发下载。
- *
- * 文件名取自后端根据链上 fileName 设的 Content-Disposition；
- * 拿不到时后端会用 `${milestoneId}.bin`，浏览器从 Content-Disposition 取。
- */
-export async function downloadMilestoneFile(milestoneId) {
-  if (useMock('downloadMilestoneFile')) {
-    return mock.downloadMilestoneFile(milestoneId)
-  }
-  const { session } = await import('../stores/session.js')
-  const headers = {}
-  if (session.currentMemberId) headers['X-Member-Id'] = session.currentMemberId
-
-  let res
-  try {
-    res = await fetch(`/api/milestones/${milestoneId}/file`, { headers })
-  } catch {
-    throw new Error('连不上服务器，请确认后端已经启动。')
-  }
-
-  if (!res.ok) {
-    let payload = null
-    try {
-      payload = await res.json()
-    } catch {
-      payload = null
-    }
-    const err = payload?.error ?? {}
-    throw new Error(err.message ?? `下载失败（HTTP ${res.status}）。`)
-  }
-
-  const blob = await res.blob()
-  const disposition = res.headers.get('Content-Disposition') || ''
-  const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)"?/i)
-  const fileName = match ? decodeURIComponent(match[1]) : `${milestoneId}.bin`
-
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
