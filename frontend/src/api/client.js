@@ -33,7 +33,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, options = {}) {
+async function request(path, { as = 'json', ...options } = {}) {
   // FormData 的 Content-Type 必须由浏览器自己设——它要在里面带上分隔串（boundary），
   // 手写会让后端解析不出字段
   const headers = options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }
@@ -52,6 +52,10 @@ async function request(path, options = {}) {
 
   // 204 没有响应体，提前返回，否则 res.json() 会抛解析错误
   if (res.status === 204) return null
+
+  // 要的是文件本身：成功时原样交出字节，不经过任何解析。
+  // 失败时照常往下走——错误体仍是 { error: { code, message } } 的 JSON（docs/API.md §7）
+  if (as === 'blob' && res.ok) return res.blob()
 
   let payload = null
   try {
@@ -95,6 +99,9 @@ async function request(path, options = {}) {
 }
 
 export const get = (path) => request(path)
+
+/** 取一个文件的原始字节（Blob）。身份头照样带上，后端据此判断能不能下载 */
+export const getBlob = (path) => request(path, { as: 'blob' })
 export const post = (path, body) =>
   request(path, {
     method: 'POST',
