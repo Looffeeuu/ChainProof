@@ -52,7 +52,13 @@ ChainProof/
 │   ├── REQUIREMENTS.md       # MVP 需求
 │   ├── ARCHITECTURE.md       # 系统架构
 │   ├── API.md                # REST API 约定
-│   └── TEAM_WORKFLOW.md      # 三人协作规范
+│   ├── TEAM_WORKFLOW.md      # 三人协作规范
+│   ├── PROJECT_REPORT.md     # 项目介绍（最终交付）
+│   ├── CONTRIBUTIONS.md      # 团队贡献记录
+│   ├── DEMO_SCRIPT.md        # 7 分钟演示脚本 / 视频录制 / 彩排记录
+│   └── defense/              # 答辩 PPT 与系统截图
+├── scripts/
+│   └── package-delivery.sh   # 敏感信息检查 + 最终交付打包
 ├── .gitignore
 └── README.md
 ```
@@ -88,7 +94,13 @@ ChainProof/
 
 ## 当前状态
 
-🚧 项目基础骨架已建立，进入 Week 1 开发阶段。
+✅ MVP 功能（FR-01 ~ FR-10）全部完成，并在真实 Fabric 网络上通过冒烟、契约检查与 Demo 重置验收。当前处于课程交付阶段（Issue #7）。
+
+- 项目介绍：[docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md)
+- 团队贡献记录：[docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md)
+- 答辩演示脚本：[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
+- 答辩 PPT：[docs/defense/ChainProof-答辩.pptx](docs/defense/ChainProof-答辩.pptx)
+- 交付打包：`bash scripts/package-delivery.sh`
 
 ## Demo 演示
 

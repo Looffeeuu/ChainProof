@@ -32,6 +32,10 @@ blockchain/network/crypto-config/
 *.pem
 *.key
 
+# 最终交付（视频等大文件不入库，见 docs/DEMO_SCRIPT.md）
+delivery/
+dist-delivery/
+
 # OS / IDE
 .DS_Store
 Thumbs.db
