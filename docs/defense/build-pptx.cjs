@@ -29,7 +29,7 @@ pptx.title = 'ChainProof 答辩'
 pptx.theme = { headFontFace: FONT, bodyFontFace: FONT }
 
 const W = 13.333
-const TOTAL = 18
+const TOTAL = 13
 let pageNo = 0
 
 function base(title, kicker) {
@@ -75,342 +75,345 @@ function arrow(s, x1, y1, x2, y2, color = C.faint) {
   })
 }
 
+
+// 讲稿备注：主讲人 + 建议时长 + 要点。7 分钟 = PPT 约 4:10 + 现场演示 2:45
+function notes(s, who, time, text) {
+  s.addNotes(`【主讲】${who}　【建议时长】${time}\n\n${text}`)
+}
+
+const PART1 = '一 · 研发意义'
+const PART2 = '二 · 技术与架构'
+const PART3 = '三 · 功能演示'
+const PART4 = '四 · 总结与思考'
+
 // 1 封面 ---------------------------------------------------------------------
 {
   const s = pptx.addSlide()
   pageNo++
   s.background = { color: C.brand }
-  s.addText('区块链技术应用实践 · 课程大作业', { x: 0.9, y: 1.4, w: 11, h: 0.4, fontSize: 16, color: 'C7CAF5', fontFace: FONT })
-  s.addText('ChainProof', { x: 0.9, y: 1.9, w: 11, h: 1.2, fontSize: 60, bold: true, color: 'FFFFFF', fontFace: FONT })
-  s.addText('基于 Hyperledger Fabric 的团队成果与贡献可信存证平台', { x: 0.9, y: 3.1, w: 11.5, h: 0.7, fontSize: 26, color: 'FFFFFF', fontFace: FONT })
-  s.addShape(pptx.ShapeType.line, { x: 0.9, y: 4.2, w: 2.2, h: 0, line: { color: 'FFFFFF', width: 2 } })
-  s.addText('A 前端 / 产品　（姓名）\nB 区块链 / 智能合约　（姓名）\nC 后端 / 集成　（姓名）', {
-    x: 0.9, y: 4.5, w: 8, h: 1.4, fontSize: 16, color: 'E0E2FA', fontFace: FONT, lineSpacingMultiple: 1.3,
-  })
+  s.addText('区块链技术应用实践 · 课程大作业　|　ChainProof 组', { x: 0.9, y: 1.3, w: 11, h: 0.4, fontSize: 16, color: 'C7CAF5', fontFace: FONT })
+  s.addText('ChainProof', { x: 0.9, y: 1.8, w: 11, h: 1.2, fontSize: 60, bold: true, color: 'FFFFFF', fontFace: FONT })
+  s.addText('基于 Hyperledger Fabric 的团队成果与贡献可信存证平台', { x: 0.9, y: 3.0, w: 11.5, h: 0.7, fontSize: 26, color: 'FFFFFF', fontFace: FONT })
+  s.addShape(pptx.ShapeType.line, { x: 0.9, y: 4.05, w: 2.2, h: 0, line: { color: 'FFFFFF', width: 2 } })
+  s.addText([
+    { text: '全书阅（组长）', options: { bold: true, color: 'FFFFFF' } }, { text: '　后端 / 集成\n', options: { color: 'C7CAF5' } },
+    { text: '杨宇', options: { bold: true, color: 'FFFFFF' } }, { text: '　前端 / 产品\n', options: { color: 'C7CAF5' } },
+    { text: '黄铭谦', options: { bold: true, color: 'FFFFFF' } }, { text: '　区块链 / 智能合约', options: { color: 'C7CAF5' } },
+  ], { x: 0.9, y: 4.3, w: 8, h: 1.5, fontSize: 17, fontFace: FONT, lineSpacingMultiple: 1.35 })
   s.addText('2026 年 11 月', { x: 0.9, y: 6.3, w: 6, h: 0.4, fontSize: 14, color: 'C7CAF5', fontFace: FONT })
-  s.addNotes('开场 15 秒：介绍项目名称和三位成员分工。')
+  notes(s, '杨宇', '0:10', '「大家好，我们是 ChainProof 组，作品是基于 Hyperledger Fabric 的团队成果与贡献可信存证平台。」介绍三位成员分工。')
 }
 
-// 2 目录 ---------------------------------------------------------------------
+// 2 研发意义 -------------------------------------------------------------------
 {
-  const s = base('目录', 'CONTENTS')
-  const items = [
-    ['01', '项目动机', '团队协作中的贡献争议'],
-    ['02', '系统架构', '链上 / 链下边界与技术栈'],
-    ['03', '核心功能', '双算哈希 · 独立确认 · 贡献统计 · 证明'],
-    ['04', '现场演示', '7 分钟完整闭环'],
-    ['05', '工程与分工', '测试、CI 与 Issue / PR 协作'],
-    ['06', '总结与思考', '收获、局限与改进'],
-  ]
-  items.forEach(([n, t, d], i) => {
-    const col = i % 2, row = Math.floor(i / 2)
-    const x = 0.8 + col * 6.1, y = 1.8 + row * 1.6
-    card(s, x, y, 5.7, 1.3)
-    s.addText(n, { x: x + 0.3, y, w: 1.1, h: 1.3, fontSize: 32, bold: true, color: C.brand, valign: 'middle', fontFace: FONT })
-    s.addText([{ text: t + '\n', options: { fontSize: 20, bold: true, color: C.ink } }, { text: d, options: { fontSize: 13, color: C.soft } }],
-      { x: x + 1.4, y, w: 4.1, h: 1.3, valign: 'middle', fontFace: FONT })
-  })
-}
-
-// 3 动机 ---------------------------------------------------------------------
-{
-  const s = base('团队项目里，最难说清的是「谁做了什么」', '01 项目动机')
+  const s = base('团队项目里，最难说清的是「谁做了什么」', PART1)
   const pains = [
     ['谁做了什么', '贡献比例常在结束时凭回忆协商，缺少过程证据。'],
-    ['什么时候完成', '文件反复修改，很难证明某个版本在某个时间点已经存在。'],
-    ['会不会被改', '贡献表、聊天记录、共享文档都可能被一方事后修改。'],
-    ['外人怎么信', '老师、评委拿到一份贡献说明，无法独立核实。'],
+    ['什么时候完成', '文件反复修改，很难证明某版本何时已存在。'],
+    ['会不会被改', '贡献表、聊天记录都可能被一方事后修改。'],
+    ['外人怎么信', '老师、评委拿到说明，也无法独立核实。'],
   ]
   pains.forEach(([t, d], i) => {
     const x = 0.8 + i * 3.05
-    card(s, x, 1.9, 2.8, 2.9)
-    s.addText(`0${i + 1}`, { x: x + 0.25, y: 2.05, w: 1, h: 0.5, fontSize: 20, bold: true, color: C.brand, fontFace: FONT })
-    s.addText(t, { x: x + 0.25, y: 2.6, w: 2.4, h: 0.5, fontSize: 19, bold: true, color: C.ink, fontFace: FONT })
-    s.addText(d, { x: x + 0.25, y: 3.15, w: 2.35, h: 1.5, fontSize: 14, color: C.soft, valign: 'top', fontFace: FONT })
+    card(s, x, 1.7, 2.8, 2.15)
+    s.addText(`0${i + 1}`, { x: x + 0.25, y: 1.8, w: 1, h: 0.45, fontSize: 18, bold: true, color: C.brand, fontFace: FONT })
+    s.addText(t, { x: x + 0.25, y: 2.25, w: 2.4, h: 0.5, fontSize: 19, bold: true, color: C.ink, fontFace: FONT })
+    s.addText(d, { x: x + 0.25, y: 2.75, w: 2.35, h: 1.0, fontSize: 14, color: C.soft, valign: 'top', fontFace: FONT })
   })
-  card(s, 0.8, 5.2, 11.95, 1.4, { fill: C.brandSoft, line: C.brandSoft })
+  s.addText('现有工具都只解决了一部分', { x: 0.8, y: 4.05, w: 6, h: 0.4, fontSize: 15, bold: true, color: C.ink, fontFace: FONT })
+  const tools = [
+    ['Git 提交记录', '只覆盖代码，历史可改写，不表达他人是否认可'],
+    ['共享文档 / 表格', '管理员单方可改，不与成果文件绑定'],
+    ['纸面签字', '无法与具体文件绑定，外人难以核验'],
+  ]
+  tools.forEach(([t, d], i) => {
+    const x = 0.8 + i * 4.05
+    card(s, x, 4.5, 3.8, 0.95)
+    s.addText([{ text: t + '\n', options: { bold: true, fontSize: 14, color: C.bad } }, { text: d, options: { fontSize: 12, color: C.soft } }],
+      { x: x + 0.2, y: 4.5, w: 3.5, h: 0.95, valign: 'middle', fontFace: FONT })
+  })
+  card(s, 0.8, 5.7, 11.95, 1.05, { fill: C.brandSoft, line: C.brandSoft })
   s.addText([
     { text: '我们的目标：', options: { bold: true, color: C.brand } },
-    { text: '把「成果文件 + 贡献比例 + 其他成员的确认」作为一个整体存证到联盟链上，并生成任何人都能公开核验的贡献证明。', options: { color: C.ink } },
-  ], { x: 1.1, y: 5.2, w: 11.4, h: 1.4, fontSize: 18, valign: 'middle', fontFace: FONT })
-  s.addNotes('从大家都经历过的小组作业讲起：贡献争议的根源是缺乏「多方认可且不可改」的过程记录。')
+    { text: '把「成果文件 + 贡献比例 + 其他成员的确认」整体存证到联盟链，并生成任何人都能公开核验的贡献证明。', options: { color: C.ink } },
+  ], { x: 1.1, y: 5.7, w: 11.4, h: 1.05, fontSize: 17, valign: 'middle', fontFace: FONT })
+  notes(s, '杨宇', '0:30', '从大家都经历过的小组作业讲起：贡献争议的根源是缺乏「多方认可、不可单方修改、能和文件绑定」的过程记录。现有工具各缺一块，联盟链正好适合多方共同认可的记录。')
 }
 
-// 4 现有方案 -------------------------------------------------------------------
+// 3 应用场景 -------------------------------------------------------------------
 {
-  const s = base('为什么不用现成的工具？', '01 项目动机')
-  const head = (t) => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: C.brand }, align: 'center' } })
-  const cell = (t, good) => ({ text: t, options: { color: good === true ? C.ok : good === false ? C.bad : C.ink, align: 'center' } })
-  const rows = [
-    [head('需求'), head('Git 提交记录'), head('共享文档 / 表格'), head('纸面签字'), head('ChainProof')],
-    [cell('覆盖所有成果类型'), cell('仅代码', false), cell('✓', true), cell('✓', true), cell('✓ 任意文件哈希', true)],
-    [cell('记录不可单方篡改'), cell('可改写历史', false), cell('管理员可改', false), cell('✓', true), cell('✓ 多节点背书', true)],
-    [cell('他人确认贡献'), cell('✗', false), cell('✗', false), cell('✓', true), cell('✓ 链码强制', true)],
-    [cell('与成果文件绑定'), cell('✓', true), cell('✗', false), cell('✗', false), cell('✓ SHA-256', true)],
-    [cell('外部可独立核验'), cell('需仓库权限', false), cell('✗', false), cell('难', false), cell('✓ 公开验证页', true)],
+  const s = base('应用场景与用户', PART1)
+  const scenes = [
+    ['课程小组作业', '每个阶段提交一次里程碑，结课按链上确认结果给出贡献比例', '组内打分有依据'],
+    ['竞赛 / 创新项目', '记录方案、代码、报告和分工，评奖时出示贡献证明', '评委快速核实'],
+    ['科研课题合作', '数据集、实验结果、论文草稿按版本存证，提前确认贡献', '减少署名争议'],
+    ['实习 / 求职', '把贡献证明附在简历里，对方点开即可核验', '用人单位可独立核验'],
   ]
-  s.addTable(rows, {
-    x: 0.8, y: 1.8, w: 11.9, colW: [2.6, 2.3, 2.3, 2.2, 2.5], rowH: 0.7,
-    fontSize: 15, fontFace: FONT, border: { type: 'solid', color: C.line, pt: 1 }, fill: { color: C.card }, valign: 'middle',
+  scenes.forEach(([t, d, g], i) => {
+    const x = 0.8 + i * 3.05
+    card(s, x, 1.7, 2.8, 2.75)
+    s.addText(t, { x: x + 0.25, y: 1.85, w: 2.4, h: 0.5, fontSize: 18, bold: true, color: C.ink, fontFace: FONT })
+    s.addText(d, { x: x + 0.25, y: 2.4, w: 2.35, h: 1.35, fontSize: 13, color: C.soft, valign: 'top', fontFace: FONT })
+    s.addText('→ ' + g, { x: x + 0.25, y: 3.85, w: 2.4, h: 0.4, fontSize: 13, bold: true, color: C.ok, fontFace: FONT })
   })
-  s.addNotes('对比现有方案：没有一种同时满足「不可单方篡改 + 他人确认 + 与文件绑定 + 外部可验」。联盟链恰好适合多方共同认可的记录。')
+  s.addText('三类用户', { x: 0.8, y: 4.65, w: 6, h: 0.4, fontSize: 15, bold: true, color: C.ink, fontFace: FONT })
+  const roles = [
+    ['项目负责人', '创建项目、登记成员'],
+    ['团队成员', '提交成果与比例；核验原文件后确认或拒绝；签发自己的证明'],
+    ['外部验证者', '老师、评委、用人单位：无需登录，凭编号核验证明'],
+  ]
+  roles.forEach(([t, d], i) => {
+    const x = 0.8 + i * 4.05
+    card(s, x, 5.1, 3.8, 1.55, { fill: C.brandSoft, line: C.brandSoft })
+    s.addText([{ text: t + '\n', options: { bold: true, fontSize: 16, color: C.brand } }, { text: d, options: { fontSize: 13, color: C.ink } }],
+      { x: x + 0.2, y: 5.1, w: 3.45, h: 1.55, valign: 'middle', fontFace: FONT })
+  })
+  notes(s, '杨宇', '0:25', '强调实用价值：凡是多人协作、需要事后说明贡献的场合都能用。外部验证者不需要账号，这是证明能「拿出去用」的关键。')
+}
+
+// 4 产品方案 -------------------------------------------------------------------
+{
+  const s = base('产品方案：一个项目的使用过程', PART1)
+  const steps = [
+    ['负责人', '创建项目\n登记成员'],
+    ['成员', '提交里程碑\n上传成果文件\n声明贡献比例'],
+    ['其他成员', '下载原文件\n本地核对哈希\n确认或拒绝'],
+    ['系统', '全员确认后\n变为「已验证」\n计入统计'],
+    ['成员 → 外部', '签发贡献证明\n凭编号公开验证'],
+  ]
+  steps.forEach(([who, what], i) => {
+    const x = 0.8 + i * 2.45
+    pill(s, who, x + 0.35, 1.85, 1.5, C.brand, C.brandSoft)
+    card(s, x, 2.45, 2.2, 2.4, { fill: i === 2 ? C.brandSoft : C.card, line: i === 2 ? C.brand : C.line })
+    s.addText(String(i + 1), { x: x + 0.15, y: 2.5, w: 0.5, h: 0.4, fontSize: 14, bold: true, color: C.brand, fontFace: FONT })
+    s.addText(what, { x: x + 0.1, y: 2.75, w: 2.0, h: 2.0, fontSize: 15, bold: true, color: C.ink, align: 'center', valign: 'middle', fontFace: FONT })
+    if (i < 4) arrow(s, x + 2.22, 3.65, x + 2.43, 3.65, C.brand)
+  })
+  card(s, 0.8, 5.2, 11.95, 1.45)
+  bullets(s, [
+    '浏览器即可使用，无需安装；九个页面覆盖概览、项目、提交、确认、证书与公开验证',
+    '每一步状态变化都是一笔 Fabric 交易，页面上直接展示对应的 txId',
+  ], 1.1, 5.35, 11.4, 1.2, 15)
+  notes(s, '杨宇', '0:25', '用五步讲清产品怎么用，第 3 步「其他成员核验并确认」是和普通存证系统最大的不同，后面技术部分会展开。讲完交给黄铭谦。')
 }
 
 // 5 架构 ---------------------------------------------------------------------
 {
-  const s = base('系统架构', '02 系统架构')
+  const s = base('系统架构与链上 / 链下边界', PART2)
   const layer = (y, title, sub, fill, color) => {
-    s.addShape(pptx.ShapeType.roundRect, { x: 0.8, y, w: 7.2, h: 0.95, rectRadius: 0.08, fill: { color: fill }, line: { color } })
+    s.addShape(pptx.ShapeType.roundRect, { x: 0.8, y, w: 7.0, h: 0.95, rectRadius: 0.08, fill: { color: fill }, line: { color } })
     s.addText([{ text: title + '\n', options: { bold: true, fontSize: 17, color } }, { text: sub, options: { fontSize: 12, color: C.soft } }],
-      { x: 1.0, y, w: 6.9, h: 0.95, valign: 'middle', fontFace: FONT })
+      { x: 1.0, y, w: 6.7, h: 0.95, valign: 'middle', fontFace: FONT })
   }
-  layer(1.7, '浏览器 · Vue 3 + Vite', '9 个页面 · 本地 SHA-256 · 演示身份切换（X-Member-Id）', C.card, C.brand)
-  arrow(s, 4.4, 2.65, 4.4, 3.0)
-  s.addText('REST / JSON + multipart', { x: 4.55, y: 2.65, w: 3, h: 0.35, fontSize: 11, color: C.faint, fontFace: FONT })
-  layer(3.0, 'Express 后端 · Node.js', '参数校验 · 服务端 SHA-256 复算 · 成员鉴权 · 错误映射 · 链下文件托管', C.card, C.teal)
-  arrow(s, 4.4, 3.95, 4.4, 4.3)
-  s.addText('Fabric Gateway SDK（gRPC + TLS）', { x: 4.55, y: 3.95, w: 3.5, h: 0.35, fontSize: 11, color: C.faint, fontFace: FONT })
-  layer(4.3, 'Hyperledger Fabric 2.5', 'test-network：Org1 + Org2 + Orderer · 通道 chainproof · LevelDB', C.card, C.warn)
-  arrow(s, 4.4, 5.25, 4.4, 5.6)
-  layer(5.6, 'ChainProofContract（JavaScript 链码）', '14 个事务函数：项目 · 里程碑 · 确认 · 统计 · 证书', C.brandSoft, C.brand)
+  layer(1.7, '前端 · Vue 3 + Vite', '9 个页面 · 浏览器本地 SHA-256 · 演示身份切换', C.card, C.brand)
+  arrow(s, 4.3, 2.65, 4.3, 3.0)
+  s.addText('REST / JSON + multipart', { x: 4.45, y: 2.65, w: 3, h: 0.35, fontSize: 11, color: C.faint, fontFace: FONT })
+  layer(3.0, '后端 · Node.js 22 + Express 5', '参数校验 · 服务端 SHA-256 复算 · 成员鉴权 · 链下文件托管', C.card, C.teal)
+  arrow(s, 4.3, 3.95, 4.3, 4.3)
+  s.addText('Fabric Gateway SDK（gRPC + TLS）', { x: 4.45, y: 3.95, w: 3.5, h: 0.35, fontSize: 11, color: C.faint, fontFace: FONT })
+  layer(4.3, '区块链 · Hyperledger Fabric 2.5.16', 'Org1 + Org2 + Orderer · 通道 chainproof · LevelDB', C.card, C.warn)
+  arrow(s, 4.3, 5.25, 4.3, 5.6)
+  layer(5.6, '智能合约 · ChainProofContract（JavaScript）', '14 个事务函数：项目 · 里程碑 · 确认 · 统计 · 证书', C.brandSoft, C.brand)
 
-  card(s, 8.5, 1.7, 4.2, 4.85)
-  s.addText('技术栈', { x: 8.8, y: 1.85, w: 3.6, h: 0.45, fontSize: 18, bold: true, color: C.ink, fontFace: FONT })
-  s.addText([
-    { text: '前端　', options: { bold: true, color: C.brand } }, { text: 'Vue 3 · Vite · Vue Router\n', options: {} },
-    { text: '后端　', options: { bold: true, color: C.teal } }, { text: 'Node.js 22 · Express 5 · multer\n', options: {} },
-    { text: '链　　', options: { bold: true, color: C.warn } }, { text: 'Fabric 2.5.16\n　　　fabric-contract-api 2.5.8\n', options: {} },
-    { text: '工程　', options: { bold: true, color: C.soft } }, { text: 'GitHub Issue / PR / Review\n　　　三条 GitHub Actions CI\n　　　WSL2 + Docker', options: {} },
-  ], { x: 8.8, y: 2.35, w: 3.8, h: 3.9, fontSize: 14, color: C.ink, valign: 'top', fontFace: FONT, lineSpacingMultiple: 1.4 })
-  s.addNotes('前端不直接接触 Fabric，所有链上操作都经后端的 Fabric Gateway 提交。课程环境用官方 test-network，真实场景中不同组织可代表团队、学院、评审机构。')
+  card(s, 8.2, 1.7, 4.55, 2.55, { fill: C.brandSoft, line: C.brandSoft })
+  s.addText('链上：需要多方认可、不可篡改', { x: 8.45, y: 1.8, w: 4.2, h: 0.45, fontSize: 15, bold: true, color: C.brand, fontFace: FONT })
+  bullets(s, ['项目与成员', '文件 SHA-256 与贡献比例', '每位成员的确认结果', '状态、证书与交易 txId'], 8.45, 2.3, 4.1, 1.9, 14)
+  card(s, 8.2, 4.45, 4.55, 1.55)
+  s.addText('链下：可替换的应用数据', { x: 8.45, y: 4.55, w: 4.2, h: 0.45, fontSize: 15, bold: true, color: C.soft, fontFace: FONT })
+  bullets(s, ['原始成果文件', '界面偏好、演示身份'], 8.45, 5.0, 4.1, 0.95, 14)
+  s.addText('原文件不上链：避免账本膨胀和内容外泄，哈希足以证明文件身份。', { x: 8.2, y: 6.1, w: 4.6, h: 0.65, fontSize: 12, color: C.soft, fontFace: FONT })
+  notes(s, '黄铭谦', '0:30', '前端不直接接触 Fabric，所有链上操作经后端 Fabric Gateway 提交。设计思路的核心是右侧的边界：只把需要多方认可的证据上链。课程环境用官方 test-network，真实场景中不同组织可代表团队、学院、评审机构。')
 }
 
-// 6 链上链下 -------------------------------------------------------------------
+// 6 双算哈希 -------------------------------------------------------------------
 {
-  const s = base('只把「需要多方认可、不可篡改」的数据上链', '02 系统架构')
-  card(s, 0.8, 1.8, 5.85, 4.2, { fill: C.brandSoft, line: C.brandSoft })
-  s.addText('链上 · Fabric 账本', { x: 1.1, y: 1.95, w: 5, h: 0.5, fontSize: 20, bold: true, color: C.brand, fontFace: FONT })
-  bullets(s, ['项目与成员列表', '里程碑与文件 SHA-256', '贡献比例声明', '每位成员的确认 / 拒绝', '里程碑状态与关键交易 txId', '贡献证明记录'], 1.1, 2.55, 5.3, 3.3)
-  card(s, 6.95, 1.8, 5.85, 4.2)
-  s.addText('链下 · 后端存储', { x: 7.25, y: 1.95, w: 5, h: 0.5, fontSize: 20, bold: true, color: C.soft, fontFace: FONT })
-  bullets(s, ['原始成果文件', '界面偏好、演示身份', '前端缓存'], 7.25, 2.55, 5.3, 3.3)
-  s.addText('原文件不上链：避免账本膨胀和内容外泄；链上哈希足以证明「这份文件就是当时被确认的那一份」。', {
-    x: 0.8, y: 6.2, w: 12, h: 0.6, fontSize: 15, color: C.soft, fontFace: FONT,
-  })
-}
-
-// 7 业务流程 -------------------------------------------------------------------
-{
-  const s = base('核心业务闭环', '03 核心功能')
-  const steps = ['创建项目\n登记成员', '提交里程碑\n上传成果文件', '前后端双算\nSHA-256', '声明贡献比例\n（整数，和为 100）', '非提交者成员\n独立确认', '全员确认\n→ VERIFIED', '时间线与\n贡献统计', '签发证明\n公开验证']
-  steps.forEach((t, i) => {
-    const col = i % 4, row = Math.floor(i / 4)
-    const x = 0.8 + col * 3.1, y = 1.9 + row * 2.3
-    card(s, x, y, 2.6, 1.6, { fill: i === 4 || i === 7 ? C.brandSoft : C.card, line: i === 4 || i === 7 ? C.brand : C.line })
-    s.addText(String(i + 1), { x: x + 0.15, y: y + 0.1, w: 0.5, h: 0.4, fontSize: 14, bold: true, color: C.brand, fontFace: FONT })
-    s.addText(t, { x, y: y + 0.25, w: 2.6, h: 1.3, fontSize: 16, bold: true, color: C.ink, align: 'center', valign: 'middle', fontFace: FONT })
-    if (col < 3) arrow(s, x + 2.65, y + 0.8, x + 3.05, y + 0.8, C.brand)
-  })
-  s.addShape(pptx.ShapeType.line, { x: 11.5, y: 3.55, w: 0, h: 0.3, line: { color: C.brand, width: 1.5 } })
-  s.addShape(pptx.ShapeType.line, { x: 2.1, y: 3.85, w: 9.4, h: 0, line: { color: C.brand, width: 1.5 } })
-  arrow(s, 2.1, 3.85, 2.1, 4.2, C.brand)
-  s.addText('每一步状态变化都是一笔 Fabric 交易，前端展示对应的 txId。', { x: 0.8, y: 6.3, w: 12, h: 0.5, fontSize: 15, color: C.soft, fontFace: FONT })
-}
-
-// 8 双算哈希 -------------------------------------------------------------------
-{
-  const s = base('机制一：前后端双算 SHA-256 + 本地核验', '03 核心功能')
+  const s = base('核心机制一：双算 SHA-256 + 本地核验', PART2)
   bullets(s, [
-    '浏览器选中文件后，先在本地计算 SHA-256 并展示',
-    '上传原始字节 + clientFileHash；后端独立复算',
-    '两端一致才写链，否则返回 FILE_HASH_MISMATCH',
+    '浏览器选中文件后先在本地算 SHA-256 并展示',
+    '上传原始字节，后端独立复算；不一致返回 FILE_HASH_MISMATCH',
     '链上哈希以服务端结果为准，原文件留在链下',
     '确认人「下载原文件 → 拖入核对框」，在浏览器本地重算比对，文件不再上传',
     '只改一个字节，哈希就完全不同',
   ], 0.8, 1.8, 5.4, 4.8, 16)
   image(s, 'confirm', 6.5, 1.8, 6.3)
-  s.addNotes('强调哈希只针对原始字节流，文件名、修改时间、multipart 编码都不参与。演示时会现场拖入一个被改过一个字节的文件。')
+  notes(s, '黄铭谦', '0:25', '哈希只针对原始字节流，文件名、修改时间、multipart 编码都不参与。现场演示会拖入一个改过一个字节的文件。')
 }
 
-// 9 独立确认 -------------------------------------------------------------------
+// 7 独立确认 + 统计 -------------------------------------------------------------
 {
-  const s = base('机制二：独立成员确认（链码强制）', '03 核心功能')
-  pill(s, 'PENDING_CONFIRMATION', 0.9, 2.4, 3.3, C.warn, C.warnSoft)
-  pill(s, 'VERIFIED', 5.6, 1.7, 2.3, C.ok, C.okSoft)
-  pill(s, 'REJECTED', 5.6, 3.1, 2.3, C.bad, C.badSoft)
-  arrow(s, 4.25, 2.5, 5.55, 1.95, C.ok)
-  arrow(s, 4.25, 2.7, 5.55, 3.3, C.bad)
-  s.addText('全部确认人 CONFIRMED', { x: 3.6, y: 1.45, w: 2.5, h: 0.3, fontSize: 11, color: C.ok, fontFace: FONT })
-  s.addText('任意一人 REJECTED', { x: 3.6, y: 3.35, w: 2.5, h: 0.3, fontSize: 11, color: C.bad, fontFace: FONT })
-  s.addText('关闭状态，不再接受表态', { x: 8.1, y: 2.3, w: 3, h: 0.5, fontSize: 13, color: C.soft, fontFace: FONT })
-
+  const s = base('核心机制二：独立确认 + 确定性统计', PART2)
+  card(s, 0.8, 1.7, 6.1, 5.0)
+  s.addText('独立成员确认（链码强制）', { x: 1.05, y: 1.8, w: 5.6, h: 0.45, fontSize: 16, bold: true, color: C.ink, fontFace: FONT })
+  pill(s, 'PENDING', 1.1, 2.75, 1.6, C.warn, C.warnSoft)
+  pill(s, 'VERIFIED', 4.4, 2.3, 1.9, C.ok, C.okSoft)
+  pill(s, 'REJECTED', 4.4, 3.25, 1.9, C.bad, C.badSoft)
+  arrow(s, 2.75, 2.85, 4.35, 2.55, C.ok)
+  arrow(s, 2.75, 3.05, 4.35, 3.45, C.bad)
+  s.addText('全员确认', { x: 3.0, y: 2.3, w: 1.4, h: 0.3, fontSize: 11, color: C.ok, fontFace: FONT })
+  s.addText('任一拒绝', { x: 3.0, y: 3.5, w: 1.4, h: 0.3, fontSize: 11, color: C.bad, fontFace: FONT })
   const rules = [
-    ['确认人快照', '创建时保存「除提交者外的全部成员」为 requiredConfirmerIds，按字节序排序'],
-    ['禁止自证', '提交者不能确认自己的里程碑 → SUBMITTER_CANNOT_CONFIRM'],
-    ['一人一票', '表态后不能撤回或改票 → ALREADY_DECIDED'],
-    ['与比例无关', '0% 的成员同样是确认人：他核对的是别人的贡献是否属实'],
+    ['禁止自证', '提交者不能确认自己的里程碑'],
+    ['确认人快照', '创建时锁定「除提交者外的全部成员」'],
+    ['一人一票', '表态后不能撤回或改票'],
+    ['与比例无关', '0% 的成员同样要核对别人的贡献'],
   ]
   rules.forEach(([t, d], i) => {
-    const y = 4.15 + i * 0.68
-    s.addText(t, { x: 0.9, y, w: 2.1, h: 0.55, fontSize: 15, bold: true, color: C.brand, fontFace: FONT, valign: 'middle' })
-    s.addText(d, { x: 3.0, y, w: 9.8, h: 0.55, fontSize: 15, color: C.ink, fontFace: FONT, valign: 'middle' })
+    const y = 4.0 + i * 0.62
+    s.addText(t, { x: 1.05, y, w: 1.6, h: 0.5, fontSize: 14, bold: true, color: C.brand, fontFace: FONT, valign: 'middle' })
+    s.addText(d, { x: 2.65, y, w: 4.1, h: 0.5, fontSize: 14, color: C.ink, fontFace: FONT, valign: 'middle' })
   })
-  s.addNotes('这里讲开发中修复的漏洞：最初规则是「全部 contributor 确认即 VERIFIED」，一个人能写自己 100% 并自己确认。第 4 周改为非提交者独立确认，并写进链码——绕过前端和后端直接调 Fabric 也跳不过去。')
-}
 
-// 10 统计 --------------------------------------------------------------------
-{
-  const s = base('机制三：确定性的贡献统计', '03 核心功能')
-  bullets(s, [
-    '只统计 VERIFIED 里程碑，每条等权',
-    '全程整数 div / mod，不用浮点数',
-    '最大余数法分配剩余百分点，总和严格 100%',
-    '余数相同按 memberId 的 UTF-8 字节序，不用本地化排序',
-    '原因：多个背书节点必须得到完全相同的读写集，否则交易无法通过背书',
-  ], 0.8, 1.8, 5.6, 4.6, 16)
-  card(s, 6.8, 1.8, 6.0, 3.6)
-  s.addText('示例：3 条已验证里程碑', { x: 7.1, y: 1.95, w: 5.5, h: 0.45, fontSize: 16, bold: true, color: C.ink, fontFace: FONT })
+  card(s, 7.15, 1.7, 5.6, 5.0)
+  s.addText('确定性的贡献统计', { x: 7.4, y: 1.8, w: 5.1, h: 0.45, fontSize: 16, bold: true, color: C.ink, fontFace: FONT })
+  s.addText('只统计已验证里程碑、每条等权；全程整数 div / mod + 最大余数法，余数相同按 memberId 字节序。所有背书节点结果一致，总和严格 100%。', {
+    x: 7.4, y: 2.25, w: 5.1, h: 1.15, fontSize: 13, color: C.soft, fontFace: FONT, valign: 'top',
+  })
   const H = (t) => ({ text: t, options: { bold: true, color: C.soft } })
   s.addTable([
-    [H('成员'), H('比例之和'), H('÷ 3'), H('余数'), H('结果')],
+    [H('成员'), H('比例和'), H('÷ 3'), H('余数'), H('结果')],
     ['alice', '130', '43', '1', { text: '44', options: { bold: true, color: C.brand } }],
     ['bob', '100', '33', '1', { text: '33', options: { bold: true, color: C.brand } }],
     ['charlie', '70', '23', '1', { text: '23', options: { bold: true, color: C.brand } }],
-  ], { x: 7.1, y: 2.55, w: 5.4, colW: [1.3, 1.1, 1.0, 1.0, 1.0], rowH: 0.5, fontSize: 15, fontFace: MONO, border: { type: 'solid', color: C.line, pt: 1 }, align: 'center' })
-  s.addText('43 + 33 + 23 = 99，剩 1 个百分点；三人余数相同，按字节序给 alice → 44 / 33 / 23，总和 100。', {
-    x: 7.1, y: 4.55, w: 5.5, h: 0.75, fontSize: 14, color: C.soft, fontFace: FONT, valign: 'top',
+  ], { x: 7.4, y: 3.5, w: 5.1, colW: [1.3, 1.0, 0.9, 0.9, 1.0], rowH: 0.45, fontSize: 14, fontFace: MONO, border: { type: 'solid', color: C.line, pt: 1 }, align: 'center' })
+  s.addText('43 + 33 + 23 = 99，剩 1 个百分点；余数相同，按字节序给 alice。', { x: 7.4, y: 5.45, w: 5.1, h: 0.9, fontSize: 13, color: C.soft, fontFace: FONT, valign: 'top' })
+  notes(s, '黄铭谦', '0:25', '左边：开发中发现过「提交者给自己写 100% 再自己确认」的漏洞，第 4 周改为非提交者独立确认，并写进链码——绕过网页直接调 Fabric 也跳不过去。右边：背书节点必须得到相同读写集，所以不用浮点数和本地化排序。')
+}
+
+// 8 创新点 -------------------------------------------------------------------
+{
+  const s = base('创新点', PART2)
+  const items = [
+    ['「他人确认」才算数，并由链码强制', '提交者不能自证；确认人是除提交者外全部成员的快照。绕过 Web 界面直接调用 Fabric 也跳不过这条规则。'],
+    ['确认的是「这一份文件」', '前后端双算 SHA-256；确认人下载原文件在浏览器本地核验，改一个字节即可发现。'],
+    ['确定性的贡献统计', '整数运算 + 最大余数法 + 字节序排序，节点、后端、前端结果完全一致，总和严格 100%。'],
+    ['无需登录的公开验证', '贡献证明可直接交给老师、评委、用人单位，凭编号独立核验；伪造编号返回 NOT_FOUND。'],
+    ['链上只存证据，不存内容', '只上链哈希、比例与确认结果，原文件留在链下，兼顾可信与隐私。'],
+  ]
+  items.forEach(([t, d], i) => {
+    const y = 1.65 + i * 1.04
+    s.addShape(pptx.ShapeType.ellipse, { x: 0.85, y: y + 0.17, w: 0.6, h: 0.6, fill: { color: C.brand }, line: { color: C.brand } })
+    s.addText(String(i + 1), { x: 0.85, y: y + 0.17, w: 0.6, h: 0.6, fontSize: 18, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle', fontFace: FONT })
+    s.addText([{ text: t + '\n', options: { bold: true, fontSize: 18, color: C.ink } }, { text: d, options: { fontSize: 14, color: C.soft } }],
+      { x: 1.7, y, w: 11.0, h: 0.95, valign: 'middle', fontFace: FONT })
   })
+  notes(s, '黄铭谦', '0:25', '对应评分「创新性」。第 1 点是全项目最核心的设计，可以多停一秒。讲完交给全书阅进入演示。')
 }
 
-// 11 证书 --------------------------------------------------------------------
+// 9 界面 ---------------------------------------------------------------------
 {
-  const s = base('机制四：贡献证明与公开验证', '03 核心功能')
-  image(s, 'certificate', 0.8, 1.75, 5.9)
-  image(s, 'verify', 6.95, 1.75, 5.9)
-  s.addText('累计比例 > 0 才能签发 · 同一成员同一项目只签发一次 · 证书引用参与的里程碑和链上 txId', { x: 0.8, y: 5.6, w: 12, h: 0.45, fontSize: 15, color: C.ink, fontFace: FONT })
-  s.addText('公开验证页无需登录：存在的证书返回 VALID，伪造编号返回 NOT_FOUND；非成员下载原文件返回 403。', { x: 0.8, y: 6.05, w: 12, h: 0.45, fontSize: 15, color: C.soft, fontFace: FONT })
+  const s = base('界面一览', PART3)
+  const shots = [['dashboard', '概览'], ['project', '项目详情'], ['certificate', '贡献证书'], ['verify', '公开验证']]
+  shots.forEach(([n, label], i) => {
+    const col = i % 2, row = Math.floor(i / 2)
+    const x = 0.8 + col * 4.15, y = 1.65 + row * 2.65
+    image(s, n, x, y, 3.95)
+    pill(s, label, x + 0.12, y + 3.95 / 1.6 - 0.54, 1.3, C.brand, 'FFFFFF')
+  })
+  card(s, 9.25, 1.65, 3.5, 5.1)
+  bullets(s, [
+    '统一的设计令牌与组件库',
+    '亮 / 暗两套主题',
+    '1280 以下响应式布局',
+    '错误逐块降级，不整页白屏',
+    '15 组前端自检保证对比度、文案与交互',
+  ], 9.45, 1.85, 3.15, 4.7, 14)
+  notes(s, '全书阅', '0:10', '对应评分「美观性」，一句带过即可，马上切到浏览器现场演示。截图来自 Mock 模式，现场与视频均为真实 Fabric 环境。')
 }
 
-// 12 界面 --------------------------------------------------------------------
+// 10 现场演示 -----------------------------------------------------------------
 {
-  const s = base('界面一览', '03 核心功能')
-  image(s, 'dashboard', 0.8, 1.75, 5.9)
-  image(s, 'project', 6.95, 1.75, 5.9)
-  s.addText('概览：项目、已验证里程碑、我的证明', { x: 0.8, y: 5.5, w: 5.9, h: 0.4, fontSize: 14, color: C.soft, align: 'center', fontFace: FONT })
-  s.addText('项目详情：累计贡献、存证概况、里程碑时间线', { x: 6.95, y: 5.5, w: 5.9, h: 0.4, fontSize: 14, color: C.soft, align: 'center', fontFace: FONT })
-  s.addText('支持亮 / 暗两套主题与 1280 以下的响应式布局。截图来自 Mock 模式，现场使用真实 Fabric 演示。', { x: 0.8, y: 6.2, w: 12, h: 0.4, fontSize: 12, color: C.faint, fontFace: FONT })
-}
-
-// 13 演示 --------------------------------------------------------------------
-{
-  const s = base('现场演示 · 7 分钟', '04 现场演示')
+  const s = base('现场演示 · 核心闭环', PART3)
   const flow = [
-    ['alice', '浏览概览与 P001 的时间线、贡献面板'],
-    ['alice', '创建项目 → 提交里程碑，展示本地 SHA-256'],
+    ['alice', '提交里程碑：浏览器本地算出 SHA-256，后端复算后写链'],
     ['alice', '提交者本人没有确认按钮'],
     ['bob', '下载原文件 → 本地核验一致；改过的文件不一致 → 确认'],
-    ['charlie', '确认 → 链上已验证，出现新 txId'],
-    ['alice', '签发贡献证明 → 公开验证 VALID'],
-    ['任意', '伪造编号 NOT_FOUND；非成员无法下载；0% 无法签发'],
+    ['charlie', '确认 → 链上已验证，出现新的 txId'],
+    ['alice', '签发贡献证明 → 公开验证「证书有效」'],
+    ['任意', '伪造编号 → NOT_FOUND'],
   ]
   flow.forEach(([who, what], i) => {
-    const y = 1.75 + i * 0.68
-    pill(s, who, 0.9, y + 0.08, 1.3, C.brand, C.brandSoft)
-    s.addText(`${i + 1}. ${what}`, { x: 2.45, y, w: 10.3, h: 0.58, fontSize: 17, color: C.ink, valign: 'middle', fontFace: FONT })
+    const y = 1.75 + i * 0.75
+    pill(s, who, 0.9, y + 0.1, 1.3, C.brand, C.brandSoft)
+    s.addText(`${i + 1}. ${what}`, { x: 2.45, y, w: 10.3, h: 0.62, fontSize: 18, color: C.ink, valign: 'middle', fontFace: FONT })
   })
-  s.addText('全部操作走真实 Fabric 网络，不手工修改账本；演示前用 npm run demo:reset 一键重建账本并写入演示数据。', { x: 0.8, y: 6.55, w: 12, h: 0.4, fontSize: 13, color: C.soft, fontFace: FONT })
-  s.addNotes('切到浏览器，按 docs/DEMO_SCRIPT.md 第 2 节执行。现场故障时改放演示视频。')
+  s.addText('全程真实 Fabric 网络，不手工修改账本。完整流程与异常场景见讲解视频。', { x: 0.8, y: 6.4, w: 12, h: 0.45, fontSize: 14, color: C.soft, fontFace: FONT })
+  notes(s, '全书阅', '2:45（现场演示）', '切到浏览器，按 docs/DEMO_SCRIPT.md 第 2 节执行。现场故障时改放讲解视频第 3 部分。演示结束切回第 11 页。')
 }
 
-// 14 质量 --------------------------------------------------------------------
+// 11 质量与协作 ----------------------------------------------------------------
 {
-  const s = base('质量保障', '05 工程与分工')
+  const s = base('质量保障与团队协作', PART4)
   const stats = [
-    ['128', '链码单元测试', 'Jest · 4 个套件全部通过'],
-    ['34', '后端单元测试', 'node:test 全部通过'],
-    ['15', '组前端自检', '对比度、契约、降级、浏览器流程…'],
-    ['3', '条 CI 流水线', 'Backend / Frontend / Chaincode'],
+    ['128', '链码单元测试'],
+    ['34', '后端单元测试'],
+    ['15', '组前端自检'],
+    ['3', '条 CI 流水线'],
   ]
-  stats.forEach(([n, t, d], i) => {
+  stats.forEach(([n, t], i) => {
     const x = 0.8 + i * 3.05
-    card(s, x, 1.8, 2.8, 2.3)
-    s.addText(n, { x: x + 0.25, y: 1.9, w: 2.4, h: 1.0, fontSize: 44, bold: true, color: C.brand, fontFace: FONT })
-    s.addText(t, { x: x + 0.25, y: 2.85, w: 2.4, h: 0.45, fontSize: 16, bold: true, color: C.ink, fontFace: FONT })
-    s.addText(d, { x: x + 0.25, y: 3.3, w: 2.4, h: 0.7, fontSize: 12, color: C.soft, fontFace: FONT, valign: 'top' })
+    card(s, x, 1.65, 2.8, 1.45)
+    s.addText(n, { x: x + 0.25, y: 1.7, w: 1.4, h: 0.9, fontSize: 38, bold: true, color: C.brand, fontFace: FONT, valign: 'middle' })
+    s.addText(t, { x: x + 0.25, y: 2.55, w: 2.4, h: 0.45, fontSize: 14, bold: true, color: C.ink, fontFace: FONT })
   })
-  bullets(s, [
-    '真实链路冒烟：smoke:projects / smoke:milestones / smoke:week3 在真实 Fabric 上通过',
-    '前后端契约：check:contract 对真实后端逐字段校验通过',
-    '一键重置：demo:reset 从全新账本重放 3 个项目、6 个里程碑、2 张证书',
-    '仓库安全：无私钥、Fabric 证书、.env、上传文件入库',
-  ], 0.8, 4.45, 12, 2.3, 15)
-}
-
-// 15 分工 --------------------------------------------------------------------
-{
-  const s = base('团队分工与协作', '05 工程与分工')
+  s.addText('真实 Fabric 冒烟、前后端契约检查、Demo 一键重置全部通过；仓库无私钥、证书和 .env 入库。', { x: 0.8, y: 3.2, w: 12, h: 0.45, fontSize: 14, color: C.soft, fontFace: FONT })
   const team = [
-    ['A', '前端 / 产品', '@Darioyy', ['9 个页面与组件库、Mock 数据', '亮 / 暗主题与响应式', '15 组前端自检脚本', '原文件下载与本地核验'], 'PR #13 #16 #20 #29 #30'],
-    ['B', '区块链 / 智能合约', '@Hmq901', ['Fabric 网络一键部署', '核心链码与确认状态机', '128 项合约测试', 'Demo 种子脚本'], 'PR #10 #12 #17 · #26'],
-    ['C', '后端 / 集成 · 统筹', '@Looffeeuu', ['Express API 与 Gateway 集成', '双 SHA-256、成员鉴权', '前后端联调与 CI', 'Issue 拆分与 Review'], 'PR #8 #9 #21–#23 #28 #31'],
+    ['全书阅（组长）', '后端 / 集成', 'Express API 与 Gateway 集成、双 SHA-256 与鉴权、联调与 CI、任务拆分与 Review'],
+    ['杨宇', '前端 / 产品', '9 个页面与组件库、主题与响应式、15 组自检、原文件下载与本地核验'],
+    ['黄铭谦', '区块链 / 智能合约', 'Fabric 网络部署、核心链码与状态机、128 项合约测试、Demo 种子脚本'],
   ]
-  team.forEach(([k, role, gh, items, prs], i) => {
+  team.forEach(([name, role, d], i) => {
     const x = 0.8 + i * 4.05
-    card(s, x, 1.75, 3.8, 4.1)
-    s.addText(k, { x: x + 0.25, y: 1.9, w: 0.6, h: 0.6, fontSize: 28, bold: true, color: C.brand, fontFace: FONT })
-    s.addText([{ text: role + '\n', options: { bold: true, fontSize: 17, color: C.ink } }, { text: gh, options: { fontSize: 12, color: C.soft } }],
-      { x: x + 0.85, y: 1.9, w: 2.9, h: 0.75, fontFace: FONT, valign: 'middle' })
-    bullets(s, items, x + 0.25, 2.8, 3.4, 2.2, 14)
-    s.addText(prs, { x: x + 0.25, y: 5.2, w: 3.4, h: 0.4, fontSize: 12, color: C.teal, fontFace: MONO })
+    card(s, x, 3.85, 3.8, 2.2)
+    s.addText([{ text: name + '\n', options: { bold: true, fontSize: 17, color: C.ink } }, { text: role, options: { fontSize: 13, color: C.brand } }],
+      { x: x + 0.25, y: 3.95, w: 3.4, h: 0.8, fontFace: FONT, valign: 'middle' })
+    s.addText(d, { x: x + 0.25, y: 4.8, w: 3.35, h: 1.15, fontSize: 13, color: C.soft, fontFace: FONT, valign: 'top' })
   })
-  s.addText('先冻结 API 契约 → 前端在 Mock 上并行开发 → 链码测试驱动 → 后端打通 → 契约检查与冒烟对齐。共 32 个 Issue / PR，每个 PR 交叉 Review 并通过 CI 才合并。', {
-    x: 0.8, y: 6.05, w: 12, h: 0.7, fontSize: 14, color: C.soft, fontFace: FONT,
+  s.addText('契约先行 → Mock 并行开发 → 测试驱动 → 联调对齐；每个 PR 交叉 Review 并通过 CI 才合并，贡献可在 GitHub 逐条追溯。', {
+    x: 0.8, y: 6.2, w: 12, h: 0.6, fontSize: 13, color: C.soft, fontFace: FONT,
   })
+  notes(s, '全书阅', '0:15', '对应评分「完整性」：用数字说明不是只做了界面。分工一句带过。')
 }
 
-// 16 总结 --------------------------------------------------------------------
+// 12 总结与改进 ----------------------------------------------------------------
 {
-  const s = base('总结与思考', '06 总结与思考')
+  const s = base('总结与思考', PART4)
+  card(s, 0.8, 1.65, 6.0, 5.1)
+  s.addText('收获', { x: 1.05, y: 1.75, w: 5.5, h: 0.45, fontSize: 17, bold: true, color: C.brand, fontFace: FONT })
   const pts = [
-    ['区块链的价值是「多方共同认可的记录」', '只把哈希、比例和确认结果上链，原文件留在链下。'],
-    ['规则必须落在链码里', '自我确认漏洞说明：前端隐藏按钮、后端校验都不够，信任边界在背书节点执行的合约中。'],
-    ['确定性是联盟链合约的硬约束', '整数运算 + 字节序排序，让所有背书节点得到相同读写集。'],
-    ['工程化让三个人并行', '契约先行、Mock 并行、测试驱动，每一步都有 Issue、PR、Review 和 CI 留痕。'],
+    ['区块链的价值是「多方共同认可的记录」', '只把证据上链，不把它当存储。'],
+    ['规则必须落在链码里', '前端隐藏按钮、后端校验都不够，信任边界在背书节点。'],
+    ['确定性是联盟链合约的硬约束', '整数运算与字节序，让所有节点读写集一致。'],
+    ['工程化让三个人并行', '契约先行、Mock 并行，每一步都有 Issue、PR、CI 留痕。'],
   ]
   pts.forEach(([t, d], i) => {
-    const y = 1.75 + i * 1.22
-    s.addShape(pptx.ShapeType.rect, { x: 0.8, y, w: 0.08, h: 1.0, fill: { color: C.brand }, line: { color: C.brand } })
-    s.addText([{ text: t + '\n', options: { bold: true, fontSize: 19, color: C.ink } }, { text: d, options: { fontSize: 15, color: C.soft } }],
-      { x: 1.1, y, w: 11.6, h: 1.0, valign: 'middle', fontFace: FONT })
+    s.addText([{ text: t + '\n', options: { bold: true, fontSize: 14, color: C.ink } }, { text: d, options: { fontSize: 12, color: C.soft } }],
+      { x: 1.05, y: 2.25 + i * 1.1, w: 5.5, h: 1.0, fontFace: FONT, valign: 'top' })
   })
+  card(s, 7.05, 1.65, 5.7, 5.1)
+  s.addText('局限与后期改进', { x: 7.3, y: 1.75, w: 5.2, h: 0.45, fontSize: 17, bold: true, color: C.brand, fontFace: FONT })
+  const imp = [
+    ['演示身份无真实登录', 'Fabric CA 为每人签发身份，链码识别调用者'],
+    ['交易都由后端同一用户提交', '成员 / 学院 / 评审各为独立组织，多组织背书'],
+    ['原文件只存后端本地', '对象存储或 IPFS，链上保留内容寻址'],
+    ['拒绝后无法修改重提', '基于原里程碑提交新版本，保留版本链'],
+  ]
+  imp.forEach(([t, d], i) => {
+    s.addText([{ text: t + '\n', options: { bold: true, fontSize: 14, color: C.bad } }, { text: '→ ' + d, options: { fontSize: 12, color: C.ink } }],
+      { x: 7.3, y: 2.25 + i * 1.1, w: 5.25, h: 1.0, fontFace: FONT, valign: 'top' })
+  })
+  notes(s, '全书阅', '0:25', '左边讲收获，右边主动讲局限：「后端能否冒充成员」是最可能被问到的问题，先在这里给出答案和改进方案。')
 }
 
-// 17 改进 --------------------------------------------------------------------
-{
-  const s = base('局限与后期改进', '06 总结与思考')
-  const H = (t) => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: C.brand } } })
-  s.addTable([
-    [H('当前局限'), H('改进思路')],
-    ['演示身份用 X-Member-Id 切换，没有真实登录', '接入 Fabric CA 为每位成员签发身份，链码用 clientIdentity 识别调用者'],
-    ['所有交易由后端以同一 Org1 用户提交', '成员 / 学院 / 评审机构作为独立组织，多组织背书'],
-    ['原文件只保存在后端本地', '对象存储或 IPFS，链上只保留内容寻址 CID'],
-    ['一旦拒绝即终止，无法修改重提', '基于原里程碑提交新版本，保留版本链'],
-    ['每条里程碑等权统计', '项目创建时约定里程碑权重并上链'],
-    ['单机 test-network', '多主机联盟网络部署，加入监控与备份'],
-  ], {
-    x: 0.8, y: 1.75, w: 11.9, colW: [5.2, 6.7], rowH: 0.62, fontSize: 15, fontFace: FONT,
-    border: { type: 'solid', color: C.line, pt: 1 }, fill: { color: C.card }, color: C.ink, valign: 'middle',
-  })
-}
-
-// 18 结束 --------------------------------------------------------------------
+// 13 结束 --------------------------------------------------------------------
 {
   const s = pptx.addSlide()
   pageNo++
   s.background = { color: C.brand }
   s.addText('谢谢！欢迎提问', { x: 0.9, y: 2.4, w: 11.5, h: 1.2, fontSize: 48, bold: true, color: 'FFFFFF', fontFace: FONT })
   s.addText('ChainProof — 让每一份贡献都能被独立核验', { x: 0.9, y: 3.7, w: 11.5, h: 0.6, fontSize: 22, color: 'E0E2FA', fontFace: FONT })
-  s.addText('github.com/Looffeeuu/ChainProof', { x: 0.9, y: 5.6, w: 8, h: 0.4, fontSize: 14, color: 'C7CAF5', fontFace: MONO })
+  s.addText('ChainProof 组：全书阅　杨宇　黄铭谦', { x: 0.9, y: 5.2, w: 8, h: 0.4, fontSize: 15, color: 'C7CAF5', fontFace: FONT })
+  s.addText('github.com/Looffeeuu/ChainProof', { x: 0.9, y: 5.65, w: 8, h: 0.4, fontSize: 14, color: 'C7CAF5', fontFace: MONO })
+  notes(s, '全书阅', '0:05', '进入 3 分钟提问，常见问题见 Issue #36。')
 }
 
 if (pageNo !== TOTAL) throw new Error(`页数 ${pageNo} 与 TOTAL ${TOTAL} 不一致`)

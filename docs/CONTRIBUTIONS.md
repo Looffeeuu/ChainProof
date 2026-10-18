@@ -1,17 +1,17 @@
 # ChainProof 团队贡献记录
 
-> 依据：GitHub Issue、Pull Request、Review 与提交记录（截至 2026-10-11）。
+> 组名：ChainProof。依据：GitHub Issue、Pull Request、Review 与提交记录（截至 2026-10-18）。
 > 仓库使用 squash merge，合并提交的作者显示为合并人，因此**以 PR 作者和 Review 记录为准**，提交数只作参考。
 
 ## 成员与分工
 
 | 成员 | GitHub | 角色 | 主线 |
 |---|---|---|---|
-| （姓名 / 学号） | @Darioyy | A | 前端 / 产品 |
-| （姓名 / 学号） | @Hmq901 | B | 区块链 / 智能合约 |
-| （姓名 / 学号） | @Looffeeuu | C | 后端 / 集成，兼项目统筹 |
+| 杨宇 | @Darioyy | A | 前端 / 产品 |
+| 黄铭谦 | @Hmq901 | B | 区块链 / 智能合约 |
+| 全书阅（组长） | @Looffeeuu | C | 后端 / 集成，兼项目统筹 |
 
-## A：前端 / 产品（@Darioyy）
+## A 杨宇：前端 / 产品（@Darioyy）
 
 **作者 PR**
 
@@ -29,7 +29,7 @@
 - 第 4 周提出「自我确认漏洞」「原文件下载入口」「Demo 数据重放」三条完善建议，拆分为 #24 ~ #26 后实施。
 - Review：PR [#9](https://github.com/Looffeeuu/ChainProof/pull/9)（Approve）、PR [#23](https://github.com/Looffeeuu/ChainProof/pull/23)（Approve）、PR [#28](https://github.com/Looffeeuu/ChainProof/pull/28)（评论）。
 
-## B：区块链 / 智能合约（@Hmq901）
+## B 黄铭谦：区块链 / 智能合约（@Hmq901）
 
 **负责 Issue**：[#1](https://github.com/Looffeeuu/ChainProof/issues/1) Fabric 测试网络、[#2](https://github.com/Looffeeuu/ChainProof/issues/2) 核心 Chaincode、[#11](https://github.com/Looffeeuu/ChainProof/issues/11) 契约对齐
 
@@ -48,7 +48,7 @@
 - 修复贡献统计取整导致总和溢出到 101% 的缺陷（`f56d28a`）。
 - Review：PR [#9](https://github.com/Looffeeuu/ChainProof/pull/9)（评论）、PR [#23](https://github.com/Looffeeuu/ChainProof/pull/23)（Approve）、PR [#28](https://github.com/Looffeeuu/ChainProof/pull/28)（Approve）。
 
-## C：后端 / 集成 · 项目统筹（@Looffeeuu）
+## C 全书阅：后端 / 集成 · 组长（@Looffeeuu）
 
 **负责 Issue**：[#3](https://github.com/Looffeeuu/ChainProof/issues/3) 后端基础，并参与 [#4](https://github.com/Looffeeuu/ChainProof/issues/4) [#5](https://github.com/Looffeeuu/ChainProof/issues/5) [#6](https://github.com/Looffeeuu/ChainProof/issues/6) [#24](https://github.com/Looffeeuu/ChainProof/issues/24)–[#27](https://github.com/Looffeeuu/ChainProof/issues/27)
 
@@ -86,9 +86,9 @@
 
 ## 第 4 周交付（Issue #7）
 
-| 交付物 | 负责人 | 状态 |
+| 交付物 | 负责人 | 跟踪 |
 |---|---|---|
-| 项目介绍文档、贡献记录、演示脚本、答辩 PPT 初稿 | C | 本 PR |
-| 演示视频录制 | 待分配 | 待完成 |
-| 7 分钟计时彩排 | 全体 | 待完成 |
-| PPT 定稿与讲述分工 | 全体 | 待完成 |
+| 项目介绍文档、贡献记录、分工打分表、演示脚本、答辩 PPT 初稿、打包脚本 | 全书阅 | PR #33 |
+| 演示讲解视频：录制 / 剪辑 | 全书阅 / 杨宇 | #34 |
+| PPT 定稿与讲述分工 | 全体 | #35 |
+| 计时彩排与问答准备 | 全体 | #36 |
