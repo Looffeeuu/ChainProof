@@ -47,7 +47,8 @@
 - 编写 Demo 演示数据一键种子脚本 `demo-seed.mjs`（#26，`c48ccc8`）。
 - 实现里程碑文件下载的首个版本（#25，`381377d`）。
 - 修复贡献统计取整导致总和溢出到 101% 的缺陷（`f56d28a`）。
-- Review：PR [#9](https://github.com/Looffeeuu/ChainProof/pull/9)（评论）、PR [#23](https://github.com/Looffeeuu/ChainProof/pull/23)（Approve）、PR [#28](https://github.com/Looffeeuu/ChainProof/pull/28)（Approve）。
+- Review：PR [#9](https://github.com/Looffeeuu/ChainProof/pull/9)（评论）、PR [#23](https://github.com/Looffeeuu/ChainProof/pull/23)（Approve）、PR [#28](https://github.com/Looffeeuu/ChainProof/pull/28)（Approve）、PR [#33](https://github.com/Looffeeuu/ChainProof/pull/33)（Approve）。
+- 撰写 PPT 第 5–8 页讲稿（#35），回答答辩问答第 1、4、7 题（#36）。
 
 ## C 全书阅：后端 / 集成 · 组长（@Looffeeuu）
 
@@ -84,7 +85,7 @@
 | #28 | C | B（Approve）、A（评论） |
 | #29 | A | C（Request changes → Approve） |
 | #30 | A | C（Approve） |
-| #33 | C | A（Request changes） |
+| #33 | C | A（Request changes）、B（Approve） |
 
 ## 第 4 周交付（Issue #7）
 
