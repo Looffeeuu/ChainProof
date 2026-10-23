@@ -27,7 +27,8 @@
 - 在 PR #28 中提交前端适配：按独立成员确认调整确认入口、进度显示与 Mock（#24）。
 - 提出并跟进 Issue [#15](https://github.com/Looffeeuu/ChainProof/issues/15)、[#19](https://github.com/Looffeeuu/ChainProof/issues/19)。
 - 第 4 周提出「自我确认漏洞」「原文件下载入口」「Demo 数据重放」三条完善建议，拆分为 #24 ~ #26 后实施。
-- Review：PR [#9](https://github.com/Looffeeuu/ChainProof/pull/9)（Approve）、PR [#23](https://github.com/Looffeeuu/ChainProof/pull/23)（Approve）、PR [#28](https://github.com/Looffeeuu/ChainProof/pull/28)（评论）。
+- Review：PR [#9](https://github.com/Looffeeuu/ChainProof/pull/9)（Approve）、PR [#23](https://github.com/Looffeeuu/ChainProof/pull/23)（Approve）、PR [#28](https://github.com/Looffeeuu/ChainProof/pull/28)（评论）、PR [#33](https://github.com/Looffeeuu/ChainProof/pull/33)（Request changes：逐条对照前端代码核对交付材料）。
+- 撰写 PPT 第 1–4 页讲稿（#35），认领并回答答辩问答第 3、8、9、10 题（#36）。
 
 ## B 黄铭谦：区块链 / 智能合约（@Hmq901）
 
@@ -83,6 +84,7 @@
 | #28 | C | B（Approve）、A（评论） |
 | #29 | A | C（Request changes → Approve） |
 | #30 | A | C（Approve） |
+| #33 | C | A（Request changes） |
 
 ## 第 4 周交付（Issue #7）
 

@@ -5,7 +5,8 @@
 //   NODE_PATH=/tmp/pptgen/node_modules node docs/defense/build-pptx.cjs \
 //     docs/defense/screenshots docs/defense/ChainProof-答辩.pptx
 //
-// 截图由前端 Mock 模式（npm run dev）+ headless Chrome 1440×900、1.5 倍缩放截取。
+// 截图由前端 Mock 模式（npm run dev）+ headless Chrome 1440×900、1.5 倍缩放截取；
+// crop-*.png 是用 ffmpeg 裁掉侧栏、只留主要内容的版本（PPT 用这一组）。
 
 const PptxGenJS = require('pptxgenjs')
 const path = require('path')
@@ -61,6 +62,15 @@ function image(s, name, x, y, w) {
   s.addShape(pptx.ShapeType.rect, { x, y, w, h: w / 1.6, fill: { color: 'FFFFFF', transparency: 100 }, line: { color: C.line, width: 1 } })
 }
 
+// 按「contain」放进 w×h 的框里（默认居中，left = true 时靠左）；pw / ph 是图片像素尺寸
+function fitImage(s, name, pw, ph, x, y, w, h, left = false) {
+  const r = pw / ph
+  const iw = Math.min(w, h * r), ih = iw / r
+  const ix = left ? x : x + (w - iw) / 2, iy = y + (h - ih) / 2
+  s.addImage({ path: shot(name), x: ix, y: iy, w: iw, h: ih })
+  s.addShape(pptx.ShapeType.rect, { x: ix, y: iy, w: iw, h: ih, fill: { color: 'FFFFFF', transparency: 100 }, line: { color: C.line, width: 1 } })
+}
+
 function pill(s, text, x, y, w, color, fill) {
   s.addShape(pptx.ShapeType.roundRect, { x, y, w, h: 0.42, rectRadius: 0.21, fill: { color: fill }, line: { color } })
   s.addText(text, { x, y, w, h: 0.42, fontSize: 13, bold: true, color, align: 'center', valign: 'middle', fontFace: FONT })
@@ -91,7 +101,7 @@ const PART4 = '四 · 总结与思考'
   const s = pptx.addSlide()
   pageNo++
   s.background = { color: C.brand }
-  s.addText('区块链技术应用实践 · 课程大作业　|　ChainProof 组', { x: 0.9, y: 1.3, w: 11, h: 0.4, fontSize: 16, color: 'C7CAF5', fontFace: FONT })
+  s.addText('课程综合实践Ⅱ · 区块链技术应用实践大作业　|　ChainProof 组', { x: 0.9, y: 1.3, w: 11, h: 0.4, fontSize: 16, color: 'C7CAF5', fontFace: FONT })
   s.addText('ChainProof', { x: 0.9, y: 1.8, w: 11, h: 1.2, fontSize: 60, bold: true, color: 'FFFFFF', fontFace: FONT })
   s.addText('基于 Hyperledger Fabric 的团队成果与贡献可信存证平台', { x: 0.9, y: 3.0, w: 11.5, h: 0.7, fontSize: 26, color: 'FFFFFF', fontFace: FONT })
   s.addShape(pptx.ShapeType.line, { x: 0.9, y: 4.05, w: 2.2, h: 0, line: { color: 'FFFFFF', width: 2 } })
@@ -101,7 +111,7 @@ const PART4 = '四 · 总结与思考'
     { text: '黄铭谦', options: { bold: true, color: 'FFFFFF' } }, { text: '　区块链 / 智能合约', options: { color: 'C7CAF5' } },
   ], { x: 0.9, y: 4.3, w: 8, h: 1.5, fontSize: 17, fontFace: FONT, lineSpacingMultiple: 1.35 })
   s.addText('2026 年 11 月', { x: 0.9, y: 6.3, w: 6, h: 0.4, fontSize: 14, color: 'C7CAF5', fontFace: FONT })
-  notes(s, '杨宇', '0:10', '「大家好，我们是 ChainProof 组，作品是基于 Hyperledger Fabric 的团队成果与贡献可信存证平台。」介绍三位成员分工。')
+  notes(s, '杨宇', '0:10', '大家好，我们是 ChainProof 组，作品是一个基于 Hyperledger Fabric 的团队贡献存证平台。组长全书阅做后端和集成，黄铭谦做区块链和智能合约，我是杨宇，做前端和产品。')
 }
 
 // 2 研发意义 -------------------------------------------------------------------
@@ -130,14 +140,14 @@ const PART4 = '四 · 总结与思考'
     const x = 0.8 + i * 4.05
     card(s, x, 4.5, 3.8, 0.95)
     s.addText([{ text: t + '\n', options: { bold: true, fontSize: 14, color: C.bad } }, { text: d, options: { fontSize: 12, color: C.soft } }],
-      { x: x + 0.2, y: 4.5, w: 3.5, h: 0.95, valign: 'middle', fontFace: FONT })
+      { x: x + 0.2, y: 4.58, w: 3.5, h: 0.85, valign: 'top', fontFace: FONT })
   })
   card(s, 0.8, 5.7, 11.95, 1.05, { fill: C.brandSoft, line: C.brandSoft })
   s.addText([
     { text: '我们的目标：', options: { bold: true, color: C.brand } },
     { text: '把「成果文件 + 贡献比例 + 其他成员的确认」整体存证到联盟链，并生成任何人都能公开核验的贡献证明。', options: { color: C.ink } },
   ], { x: 1.1, y: 5.7, w: 11.4, h: 1.05, fontSize: 17, valign: 'middle', fontFace: FONT })
-  notes(s, '杨宇', '0:30', '从大家都经历过的小组作业讲起：贡献争议的根源是缺乏「多方认可、不可单方修改、能和文件绑定」的过程记录。现有工具各缺一块，联盟链正好适合多方共同认可的记录。')
+  notes(s, '杨宇', '0:30', '做过小组作业的都知道，最难说清的是谁做了什么。比例常常在结束时凭回忆定，贡献表一方事后就能改，老师拿到一份说明也没法自己核实。现有的工具各缺一块：Git 只管代码，共享表格管理员一个人能改，纸面签字和文件对不上。所以我们把成果文件、贡献比例和其他成员的确认一起存到联盟链上，再生成任何人都能核验的贡献证明。')
 }
 
 // 3 应用场景 -------------------------------------------------------------------
@@ -166,9 +176,9 @@ const PART4 = '四 · 总结与思考'
     const x = 0.8 + i * 4.05
     card(s, x, 5.1, 3.8, 1.55, { fill: C.brandSoft, line: C.brandSoft })
     s.addText([{ text: t + '\n', options: { bold: true, fontSize: 16, color: C.brand } }, { text: d, options: { fontSize: 13, color: C.ink } }],
-      { x: x + 0.2, y: 5.1, w: 3.45, h: 1.55, valign: 'middle', fontFace: FONT })
+      { x: x + 0.2, y: 5.25, w: 3.45, h: 1.35, valign: 'top', fontFace: FONT })
   })
-  notes(s, '杨宇', '0:25', '强调实用价值：凡是多人协作、需要事后说明贡献的场合都能用。外部验证者不需要账号，这是证明能「拿出去用」的关键。')
+  notes(s, '杨宇', '0:25', '凡是事后要说明贡献的合作都能用：课程作业、竞赛、科研合作，还有求职时附在简历上。用户分三类：负责人建项目、登记成员；成员提交成果，互相核验确认；外部的老师、评委、用人单位不用注册，凭证书编号就能核验（这一点决定了证明能拿出去用）。')
 }
 
 // 4 产品方案 -------------------------------------------------------------------
@@ -192,9 +202,9 @@ const PART4 = '四 · 总结与思考'
   card(s, 0.8, 5.2, 11.95, 1.45)
   bullets(s, [
     '浏览器即可使用，无需安装；九个页面覆盖概览、项目、提交、确认、证书与公开验证',
-    '每一步状态变化都是一笔 Fabric 交易，页面上直接展示对应的 txId',
+    '提交、确认、签发都是 Fabric 交易，里程碑和证书上能看到对应的 txId',
   ], 1.1, 5.35, 11.4, 1.2, 15)
-  notes(s, '杨宇', '0:25', '用五步讲清产品怎么用，第 3 步「其他成员核验并确认」是和普通存证系统最大的不同，后面技术部分会展开。讲完交给黄铭谦。')
+  notes(s, '杨宇', '0:25', '用起来是五步：负责人建项目；成员上传成果文件，声明贡献比例；其他成员下载原文件，在浏览器里核对哈希，再确认或拒绝；全员确认后记录变成已验证，计入统计；最后签发证明，公开验证。第三步是和普通存证系统最大的不同，下面请黄铭谦讲它是怎么做到的。')
 }
 
 // 5 架构 ---------------------------------------------------------------------
@@ -235,7 +245,7 @@ const PART4 = '四 · 总结与思考'
     '确认人「下载原文件 → 拖入核对框」，在浏览器本地重算比对，文件不再上传',
     '只改一个字节，哈希就完全不同',
   ], 0.8, 1.8, 5.4, 4.8, 16)
-  image(s, 'confirm', 6.5, 1.8, 6.3)
+  fitImage(s, 'crop-confirm', 1800, 1350, 6.4, 1.7, 6.35, 5.05)
   notes(s, '黄铭谦', '0:25', '哈希只针对原始字节流，文件名、修改时间、multipart 编码都不参与。现场演示会拖入一个改过一个字节的文件。')
 }
 
@@ -302,21 +312,21 @@ const PART4 = '四 · 总结与思考'
 // 9 界面 ---------------------------------------------------------------------
 {
   const s = base('界面一览', PART3)
-  const shots = [['dashboard', '概览'], ['project', '项目详情'], ['certificate', '贡献证书'], ['verify', '公开验证']]
-  shots.forEach(([n, label], i) => {
+  const shots = [
+    ['crop-dashboard', 1588, 610, '概览：项目、已验证里程碑、最近活动'],
+    ['crop-project', 1588, 594, '项目详情：累计贡献与存证概况'],
+    ['crop-certificate', 1077, 767, '贡献证书'],
+    ['crop-verify', 958, 691, '公开验证：无需登录'],
+  ]
+  shots.forEach(([n, pw, ph, label], i) => {
     const col = i % 2, row = Math.floor(i / 2)
-    const x = 0.8 + col * 4.15, y = 1.65 + row * 2.65
-    image(s, n, x, y, 3.95)
-    pill(s, label, x + 0.12, y + 3.95 / 1.6 - 0.54, 1.3, C.brand, 'FFFFFF')
+    const x = 0.8 + col * 6.05, y = 1.6 + row * 2.5
+    s.addText(label, { x, y, w: 5.9, h: 0.35, fontSize: 13, bold: true, color: C.brand, fontFace: FONT })
+    fitImage(s, n, pw, ph, x, y + 0.4, 5.9, 2.0, true)
   })
-  card(s, 9.25, 1.65, 3.5, 5.1)
-  bullets(s, [
-    '统一的设计令牌与组件库',
-    '亮 / 暗两套主题',
-    '1280 以下响应式布局',
-    '错误逐块降级，不整页白屏',
-    '15 组前端自检保证对比度、文案与交互',
-  ], 9.45, 1.85, 3.15, 4.7, 14)
+  s.addText('统一设计令牌与组件库 · 亮 / 暗两套主题 · 窄到 375 px 手机宽也不出横向滚动 · 错误逐块降级 · 15 组前端自检', {
+    x: 0.8, y: 6.55, w: 12, h: 0.4, fontSize: 13, color: C.soft, fontFace: FONT,
+  })
   notes(s, '全书阅', '0:10', '对应评分「美观性」，一句带过即可，马上切到浏览器现场演示。截图来自 Mock 模式，现场与视频均为真实 Fabric 环境。')
 }
 
@@ -412,7 +422,6 @@ const PART4 = '四 · 总结与思考'
   s.addText('谢谢！欢迎提问', { x: 0.9, y: 2.4, w: 11.5, h: 1.2, fontSize: 48, bold: true, color: 'FFFFFF', fontFace: FONT })
   s.addText('ChainProof — 让每一份贡献都能被独立核验', { x: 0.9, y: 3.7, w: 11.5, h: 0.6, fontSize: 22, color: 'E0E2FA', fontFace: FONT })
   s.addText('ChainProof 组：全书阅　杨宇　黄铭谦', { x: 0.9, y: 5.2, w: 8, h: 0.4, fontSize: 15, color: 'C7CAF5', fontFace: FONT })
-  s.addText('github.com/Looffeeuu/ChainProof', { x: 0.9, y: 5.65, w: 8, h: 0.4, fontSize: 14, color: 'C7CAF5', fontFace: MONO })
   notes(s, '全书阅', '0:05', '进入 3 分钟提问，常见问题见 Issue #36。')
 }
 
