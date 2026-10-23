@@ -6,7 +6,7 @@
  *
  * 写入内容：
  *   - 3 个项目（P001 / P002 / P003）
- *   - 5 个里程碑（覆盖 VERIFIED / REJECTED / PENDING_CONFIRMATION）
+ *   - 6 个里程碑（覆盖 VERIFIED / REJECTED / PENDING_CONFIRMATION）
  *   - 2 张贡献证书
  *   - 1 个 NOT_FOUND 演示 ID
  */
@@ -51,11 +51,12 @@ function fileHash (filePath) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-function uploadForm (title, description, contributors, filePath, submitterId) {
+function uploadForm (milestoneId, title, description, contributors, filePath, submitterId) {
   const bytes = readFileSync(filePath)
   const fileName = filePath.split(/[/\\]/).pop()
   const hash = createHash('sha256').update(bytes).digest('hex')
   const form = new FormData()
+  form.set('milestoneId', milestoneId)
   form.set('title', title)
   form.set('description', description)
   form.set('contributors', JSON.stringify(contributors))
@@ -94,6 +95,7 @@ log('✅', `P001 已创建（owner: ${P001.ownerId}, txId: ${P001.txId.slice(0, 
 // M001: VERIFIED — alice 提交，bob + charlie 确认
 log('📦', '创建里程碑 M001（选题报告与分工方案）...')
 const m001 = uploadForm(
+  'M001',
   '选题报告与分工方案',
   '确定选题、评测范围与三人分工，附课程选题表。',
   [
@@ -119,6 +121,7 @@ log('✅', `M001 → ${milestone.status}`)
 // M002: VERIFIED — bob 提交，alice + charlie 确认
 log('📦', '创建里程碑 M002（数据标注规范与 200 条样本）...')
 const m002 = uploadForm(
+  'M002',
   '数据标注规范与 200 条样本',
   '标注规范 v1.0，200 条样本双人交叉标注，一致率 0.91。',
   [
@@ -144,6 +147,7 @@ log('✅', `M002 → ${milestone.status}`)
 // M003: REJECTED — alice 提交，bob 拒绝
 log('📦', '创建里程碑 M003（初版评测指标与权重）...')
 const m003 = uploadForm(
+  'M003',
   '初版评测指标与权重',
   'bob 拒绝：指标权重与分工记录不一致，比例需要重新分配后再提交。',
   [
@@ -167,6 +171,7 @@ log('✅', `M003 → ${milestone.status}`)
 // M004: PENDING_CONFIRMATION — alice 提交，bob 确认，charlie 未确认
 log('📦', '创建里程碑 M004（基准测试集 v0.3 与评测脚本）...')
 const m004 = uploadForm(
+  'M004',
   '基准测试集 v0.3 与评测脚本',
   '新增 60 条对抗样本；评测脚本改为按场景分组输出。等待 charlie 确认。',
   [
@@ -214,6 +219,7 @@ log('✅', `P002 已创建（owner: ${P002.ownerId}, txId: ${P002.txId.slice(0, 
 // M101: VERIFIED — bob 提交，alice + charlie 确认
 log('📦', '创建里程碑 M101（实验一至实验四报告归档）...')
 const m101 = uploadForm(
+  'M101',
   '实验一至实验四报告归档',
   '四次实验的报告、代码与运行结果，打包存证。',
   [
@@ -263,6 +269,7 @@ log('✅', `P003 已创建（owner: ${P003.ownerId}, description 为空以触发
 // M301: VERIFIED — alice 提交，charlie 确认，charlie 贡献 0%
 log('📦', '创建里程碑 M301（答辩演示脚本初稿）...')
 const m301 = uploadForm(
+  'M301',
   '答辩演示脚本初稿',
   'charlie 是项目成员但未贡献任何内容，贡献比例为 0%。',
   [
@@ -334,8 +341,8 @@ console.log(`  ${NOT_FOUND_ID}`)
 console.log('\n前端入口：')
 console.log(`  Dashboard    →  /`)
 console.log(`  项目详情     →  /projects/P001`)
-console.log(`  里程碑确认   →  /projects/P001/milestones/M004  （PENDING 状态）`)
-console.log(`  贡献证书     →  /projects/P001/certificates/${certP001Alice.certificateId}`)
+console.log(`  里程碑确认   →  /milestones/M004  （PENDING 状态）`)
+console.log(`  贡献证书     →  /certificates/${certP001Alice.certificateId}`)
 console.log(`  公开验证     →  /verify/${certP001Alice.certificateId}`)
 console.log(`  公开验证 404 →  /verify/${NOT_FOUND_ID}`)
 console.log()

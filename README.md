@@ -130,7 +130,7 @@ npm run demo:seed
 
 ### Demo 数据内容
 
-写入 3 个项目、5 个里程碑、2 张证书：
+写入 3 个项目、6 个里程碑、2 张证书：
 
 | 项目 | 里程碑 | 状态 | 说明 |
 |------|--------|------|------|
@@ -142,8 +142,10 @@ npm run demo:seed
 | P003 答辩演示脚本 | M301 答辩演示脚本初稿 | VERIFIED | alice 提交，charlie 确认但贡献 0% |
 
 证书：
-- `CERT-P001-ALICE` — alice @ P001，贡献 55%
-- `CERT-P002-BOB` — bob @ P002，贡献 33%
+- alice @ P001，贡献 44%
+- bob @ P002，贡献 33%
+
+证书 ID 由后端运行时生成；`npm run demo:seed` 完成后会输出两张证书的实际 ID 和可直接访问的页面路径。
 
 NOT_FOUND 演示 ID：`CP-DEMO-NOT-FOUND`
 
@@ -157,7 +159,7 @@ cd frontend && npm run dev
 
 - Dashboard → http://localhost:5173/
 - 项目详情 → http://localhost:5173/projects/P001
-- 里程碑确认（PENDING）→ http://localhost:5173/projects/P001/milestones/M004
-- 贡献证书 → http://localhost:5173/projects/P001/certificates/CERT-P001-ALICE
-- 公开验证 → http://localhost:5173/verify/CERT-P001-ALICE
+- 里程碑确认（PENDING）→ http://localhost:5173/milestones/M004
+- 贡献证书 → 使用 seed 输出的 `/certificates/<certificateId>`
+- 公开验证 → 使用 seed 输出的 `/verify/<certificateId>`
 - 公开验证 404 → http://localhost:5173/verify/CP-DEMO-NOT-FOUND

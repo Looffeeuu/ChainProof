@@ -1,0 +1,48 @@
+name: Chaincode CI
+
+on:
+  pull_request:
+    paths:
+      - 'blockchain/chaincode/**'
+      - 'blockchain/network/**'
+      - '.github/workflows/chaincode-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'blockchain/chaincode/**'
+      - 'blockchain/network/**'
+      - '.github/workflows/chaincode-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: chaincode-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test chaincode and network scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: blockchain/chaincode/package-lock.json
+
+      - name: Install chaincode dependencies
+        working-directory: blockchain/chaincode
+        run: npm ci
+
+      - name: Run chaincode tests
+        working-directory: blockchain/chaincode
+        run: npm test
+
+      - name: Check network script syntax
+        shell: bash
+        run: |
+          find blockchain/network -type f -name '*.sh' -print0 |
+            xargs -0 -n1 bash -n

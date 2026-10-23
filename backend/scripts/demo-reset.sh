@@ -70,7 +70,7 @@ echo ""
 # ─── Step 1: 关闭旧网络 ──────────────────────────────────────────────────────
 
 info "Step 1/5: 关闭 Fabric 网络..."
-if [[ -x "${NETWORK_SCRIPT}" ]]; then
+if [[ -f "${NETWORK_SCRIPT}" ]]; then
   bash "${NETWORK_SCRIPT}" down || warn "网络可能未运行，继续..."
 else
   fatal "找不到网络脚本: ${NETWORK_SCRIPT}"
@@ -86,8 +86,35 @@ success "网络已启动"
 # ─── Step 3: 部署链码 ────────────────────────────────────────────────────────
 
 info "Step 3/5: 部署最新链码..."
-bash "${NETWORK_SCRIPT}" deploy
-success "链码已部署"
+# 上一步刚清空账本并创建了全新通道，首个链码定义必须从 sequence 1 开始。
+# config.env 默认 sequence 2 用于升级已有开发网络；这里显式覆盖。
+CC_SEQUENCE=1 bash "${NETWORK_SCRIPT}" deploy
+success "链码已部署（全新通道 sequence 1）"
+
+# 从刚生成的 test-network 证书导出 Backend Gateway 配置。
+# 这样全新 worktree 无需先手工创建 backend/.env。
+# shellcheck source=../../blockchain/network/config.env
+source "${REPO_ROOT}/blockchain/network/config.env"
+ORG1_DIR="${TEST_NETWORK_DIR}/organizations/peerOrganizations/org1.example.com"
+USER1_MSP="${ORG1_DIR}/users/User1@org1.example.com/msp"
+
+export FABRIC_MSP_ID="Org1MSP"
+export FABRIC_CHANNEL_NAME="${CHANNEL_NAME}"
+export FABRIC_CHAINCODE_NAME="${CC_NAME}"
+export FABRIC_PEER_ENDPOINT="localhost:7051"
+export FABRIC_PEER_HOST_ALIAS="peer0.org1.example.com"
+export FABRIC_TLS_CERT_PATH="${ORG1_DIR}/peers/peer0.org1.example.com/tls/ca.crt"
+export FABRIC_CERT_PATH="${USER1_MSP}/signcerts/User1@org1.example.com-cert.pem"
+export FABRIC_KEY_PATH="${USER1_MSP}/keystore/priv_sk"
+
+if [[ ! -f "${FABRIC_KEY_PATH}" ]]; then
+  FABRIC_KEY_PATH="$(find "${USER1_MSP}/keystore" -maxdepth 1 -type f -print -quit)"
+  export FABRIC_KEY_PATH
+fi
+
+[[ -f "${FABRIC_TLS_CERT_PATH}" ]] || fatal "找不到 Org1 peer TLS 证书：${FABRIC_TLS_CERT_PATH}"
+[[ -f "${FABRIC_CERT_PATH}" ]] || fatal "找不到 User1 签名证书：${FABRIC_CERT_PATH}"
+[[ -n "${FABRIC_KEY_PATH}" && -f "${FABRIC_KEY_PATH}" ]] || fatal "找不到 User1 私钥：${USER1_MSP}/keystore"
 
 # ─── Step 4: 启动 Backend ────────────────────────────────────────────────────
 
@@ -139,14 +166,14 @@ cat <<'EOF'
 ║                                                                  ║
 ║  已写入数据：                                                    ║
 ║    - 3 个项目（P001 / P002 / P003）                              ║
-║    - 5 个里程碑（VERIFIED × 3 / REJECTED × 1 / PENDING × 1）    ║
+║    - 6 个里程碑（VERIFIED × 4 / REJECTED × 1 / PENDING × 1）    ║
 ║    - 2 张贡献证书                                                ║
 ║                                                                  ║
 ║  前端入口：                                                      ║
 ║    Dashboard    →  http://localhost:5173/                        ║
 ║    项目详情     →  http://localhost:5173/projects/P001           ║
-║    里程碑确认   →  http://localhost:5173/projects/P001/          ║
-║                    milestones/M004  （PENDING 状态）              ║
+║    里程碑确认   →  http://localhost:5173/milestones/M004         ║
+║                    （PENDING 状态）                               ║
 ║    公开验证     →  http://localhost:5173/verify/                 ║
 ║                                                                  ║
 ╚══════════════════════════════════════════════════════════════════╝
