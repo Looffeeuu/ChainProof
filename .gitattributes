@@ -43,6 +43,9 @@
 *.gz   binary
 *.tar  binary
 *.vmdk binary
+*.pptx binary
+*.docx binary
+*.mp4  binary
 
 # 锁文件按文本处理但保持 LF（内容含哈希，换行符被改动会导致校验失败）
 package-lock.json text eol=lf
