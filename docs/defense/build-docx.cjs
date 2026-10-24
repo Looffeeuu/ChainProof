@@ -57,7 +57,10 @@ for (const job of JOBS) {
   md = md.replace(/\]\(((?!https?:)[^)#]+\.md)\)/g, (_, href) => `](${BLOB}${href})`)
   let body = marked.parse(md, { breaks: false })
   // Word 不认 CSS 里的图片宽度：直接写像素尺寸（截图均为 16:10）
-  body = body.replace(/<img /g, '<img width="280" height="175" ')
+  body = body.replace(/<img /g, '<img width="520" height="325" ')
+  // 插图与「表 n / 图 n」标题居中
+  body = body.replace(/<p><img /g, '<p style="text-align:center"><img ')
+  body = body.replace(/<p><strong>([表图] \d+)/g, '<p style="text-align:center"><strong>$1')
   // 短单元格（姓名、分数等）不换行，避免 Word 自动列宽把它挤成竖排
   body = body.replace(/<(td|th)>([^<]{1,7})<\/\1>/g, '<$1 nowrap>$2</$1>')
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${job.title}</title><style>${CSS}</style></head><body>${body}</body></html>`
