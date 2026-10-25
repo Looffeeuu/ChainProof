@@ -57,6 +57,7 @@ ChainProof/
 │   ├── CONTRIBUTIONS.md      # 团队贡献记录（Issue / PR 追溯）
 │   ├── TEAM_SCORES.md        # 组内成员任务分工与贡献打分
 │   ├── DEMO_SCRIPT.md        # 现场演示 / 讲解视频脚本与彩排记录
+│   ├── NARRATION.md          # 两个版本的逐句讲稿（讲解视频 / 现场演示）
 │   └── defense/              # 答辩 PPT、Word 版文档、截图与生成脚本
 ├── scripts/
 │   └── package-delivery.sh   # 敏感信息检查 + 最终交付打包
@@ -100,7 +101,7 @@ ChainProof/
 - 项目介绍：[docs/PROJECT_REPORT.md](docs/PROJECT_REPORT.md)
 - 团队贡献记录：[docs/CONTRIBUTIONS.md](docs/CONTRIBUTIONS.md)
 - 成员分工与贡献打分：[docs/TEAM_SCORES.md](docs/TEAM_SCORES.md)
-- 演示脚本（现场版 / 讲解视频版）：[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
+- 演示脚本（现场版 / 讲解视频版）：[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)，逐句讲稿：[docs/NARRATION.md](docs/NARRATION.md)
 - 答辩 PPT：[docs/defense/ChainProof-答辩.pptx](docs/defense/ChainProof-答辩.pptx)
 - Word 版：[项目介绍](docs/defense/ChainProof-项目介绍.docx) · [成员分工与贡献打分](docs/defense/ChainProof-成员分工与贡献打分.docx)
 - 交付打包：`bash scripts/package-delivery.sh`（每位组员各一份，截止 10-31 23:59 上传学在浙大）
