@@ -79,7 +79,11 @@ success "网络已关闭"
 
 # 链下原文件按 milestoneId 落盘且只写一次（file-storage.service.js 用 'wx'）。
 # 账本清空后必须一起清掉，否则 seed 的固定 ID（M001…）会因文件已存在而 500。
-UPLOAD_DIR_RESOLVED="${UPLOAD_DIR:-$(grep -E '^UPLOAD_DIR=' "${BACKEND_DIR}/.env" 2>/dev/null | tail -n 1 | cut -d= -f2-)}"
+# set -euo pipefail 下 grep 找不到 .env 会让整条赋值失败并静默退出，所以要兜底
+UPLOAD_DIR_RESOLVED="${UPLOAD_DIR:-}"
+if [[ -z "${UPLOAD_DIR_RESOLVED}" && -f "${BACKEND_DIR}/.env" ]]; then
+  UPLOAD_DIR_RESOLVED="$({ grep -E '^UPLOAD_DIR=' "${BACKEND_DIR}/.env" || true; } | tail -n 1 | cut -d= -f2-)"
+fi
 UPLOAD_DIR_RESOLVED="${UPLOAD_DIR_RESOLVED:-${BACKEND_DIR}/uploads}"
 [[ "${UPLOAD_DIR_RESOLVED}" = /* ]] || UPLOAD_DIR_RESOLVED="${BACKEND_DIR}/${UPLOAD_DIR_RESOLVED#./}"
 if [[ -d "${UPLOAD_DIR_RESOLVED}" ]]; then
