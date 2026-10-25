@@ -47,7 +47,7 @@ cat <<'EOF'
 ║  此脚本将执行以下操作：                                          ║
 ║                                                                  ║
 ║  1. 关闭当前 Fabric 网络（所有容器将被删除）                     ║
-║  2. 清理本地账本数据（所有链上状态将丢失）                       ║
+║  2. 清理本地账本数据与链下上传文件（所有链上状态将丢失）         ║
 ║  3. 重新启动网络并部署最新链码                                   ║
 ║  4. 写入 Demo 演示数据（覆盖现有数据）                           ║
 ║                                                                  ║
@@ -76,6 +76,16 @@ else
   fatal "找不到网络脚本: ${NETWORK_SCRIPT}"
 fi
 success "网络已关闭"
+
+# 链下原文件按 milestoneId 落盘且只写一次（file-storage.service.js 用 'wx'）。
+# 账本清空后必须一起清掉，否则 seed 的固定 ID（M001…）会因文件已存在而 500。
+UPLOAD_DIR_RESOLVED="${UPLOAD_DIR:-$(grep -E '^UPLOAD_DIR=' "${BACKEND_DIR}/.env" 2>/dev/null | tail -n 1 | cut -d= -f2-)}"
+UPLOAD_DIR_RESOLVED="${UPLOAD_DIR_RESOLVED:-${BACKEND_DIR}/uploads}"
+[[ "${UPLOAD_DIR_RESOLVED}" = /* ]] || UPLOAD_DIR_RESOLVED="${BACKEND_DIR}/${UPLOAD_DIR_RESOLVED#./}"
+if [[ -d "${UPLOAD_DIR_RESOLVED}" ]]; then
+  removed="$(find "${UPLOAD_DIR_RESOLVED}" -maxdepth 1 -type f -name '*.bin' -print -delete | wc -l)"
+  success "已清理链下上传文件 ${removed} 个（${UPLOAD_DIR_RESOLVED}）"
+fi
 
 # ─── Step 2: 启动网络 ────────────────────────────────────────────────────────
 
