@@ -20,6 +20,8 @@
 
 set -euo pipefail
 
+command -v python3 >/dev/null || { echo "[FAIL] 需要 python3 生成压缩包" >&2; exit 1; }
+
 GROUP="ChainProof"
 APP="ChainProof"
 MEMBERS=("组长:全书阅" "组员:杨宇" "组员:黄铭谦")
@@ -109,7 +111,22 @@ for m in "${MEMBERS[@]}"; do
   name="${GROUP}-${m%%:*}-${m#*:}-${APP}"
   rm -f "$out_dir/$name.zip"
   cp -r "$tpl" "$stage/$name"
-  (cd "$stage" && zip -qr "$out_dir/$name.zip" "$name")
+  # 不用 Info-ZIP：在非 UTF-8 locale 下它不给中文路径设 UTF-8 标记（EFS），
+  # Windows 解压后目录名会是乱码。Python zipfile 遇到非 ASCII 名会自动设置。
+  python3 - "$stage" "$name" "$out_dir/$name.zip" <<'PY'
+import os, sys, zipfile
+stage, name, out = sys.argv[1:]
+stored = ('.mp4', '.pptx', '.docx', '.png', '.jpg', '.zip', '.woff2')
+with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+    for root, dirs, files in os.walk(os.path.join(stage, name)):
+        dirs.sort()
+        rel = os.path.relpath(root, stage)
+        z.write(root, rel + '/')
+        for f in sorted(files):
+            path = os.path.join(root, f)
+            method = zipfile.ZIP_STORED if f.lower().endswith(stored) else zipfile.ZIP_DEFLATED
+            z.write(path, os.path.join(rel, f), compress_type=method)
+PY
   ok "dist-delivery/$name.zip（$(du -h "$out_dir/$name.zip" | cut -f1)）"
 done
 
